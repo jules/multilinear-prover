@@ -1,5 +1,3 @@
-//! taken from air compiler
-
 use crate::field::*;
 use crate::prover::engine::Engine;
 use core::fmt::Debug;
@@ -7,20 +5,21 @@ use core::fmt::Display;
 use core::fmt::Formatter;
 use core::hash::Hash;
 use core::hash::Hasher;
-use std::ops::BitXorAssign;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 /// The prime field `F_p` where `p = 2^31 - 1`.
-pub struct Mersenne31Field(pub u32);
+// NOTE: using a 64 bit register shouldn't affect performance on 64-bit processors (which is
+// where i assume most CPU provers will run) but should save us small extra costs incurred from
+// register truncation and expansion in for example multiplications.
+pub struct Mersenne31Field(pub u64);
 
 impl Mersenne31Field {
-    pub const ORDER: u32 = (1 << 31) - 1;
-    pub const MSBITMASK: u32 = 1 << 31;
+    pub const ORDER: u64 = (1 << 31) - 1;
+    pub const MSBITMASK: u64 = (u32::MAX as u64) << 32 + 1 << 31;
 
-    pub const fn new(value: u32) -> Self {
-        debug_assert!((value >> 31) == 0);
-
+    pub const fn new(value: u64) -> Self {
+        debug_assert!(value < Self::ORDER);
         Self(value)
     }
 
@@ -30,47 +29,37 @@ impl Mersenne31Field {
         if c >= Self::ORDER {
             c -= Self::ORDER;
         }
-        c
-    }
-
-    pub const fn from_nonreduced_u32(c: u64) -> Self {
-        let mut c = c as u32;
-        if c >= Self::ORDER {
-            c -= Self::ORDER;
-        }
-        Self::new(c)
+        c as u32
     }
 
     pub fn mul_2exp_u64(&self, exp: u64) -> Self {
         // In a Mersenne field, multiplication by 2^k is just a left rotation by k bits.
-        let exp = (exp % 31) as u8;
-        let left = (self.0 << exp) & ((1 << 31) - 1);
+        debug_assert!(exp < 31);
+        let left = (self.0 << exp) & Self::ORDER;
         let right = self.0 >> (31 - exp);
-        let rotated = left | right;
-        Self::new(rotated)
+        Self::new(left | right)
     }
 
     #[inline]
     pub fn div_2exp_u64(&self, exp: u64) -> Self {
         // In a Mersenne field, division by 2^k is just a right rotation by k bits.
-        let exp = (exp % 31) as u8;
+        debug_assert!(exp < 31);
         let left = self.0 >> exp;
-        let right = (self.0 << (31 - exp)) & ((1 << 31) - 1);
-        let rotated = left | right;
-        Self::new(rotated)
+        let right = (self.0 << (31 - exp)) & Self::ORDER;
+        Self::new(left | right)
     }
 
     #[inline(always)]
     pub fn from_negative_u64_with_reduction(x: u64) -> Self {
-        let x_low = (x as u32) & ((1 << 31) - 1);
-        let x_high = ((x >> 31) as u32) & ((1 << 31) - 1);
-        let x_sign = (x >> 63) as u32;
+        let x_low = x & Self::ORDER;
+        let x_high = (x >> 31) & Self::ORDER;
+        let x_sign = x >> 63;
         let res_wrapped = x_low.wrapping_add(x_high);
         let res_wrapped = res_wrapped - x_sign;
-        let msb = res_wrapped & (1 << 31);
+        let msb = res_wrapped & Self::MSBITMASK;
         let mut sum = res_wrapped;
-        sum.bitxor_assign(msb);
-        let mut res = sum + u32::from(msb != 0);
+        sum ^= msb;
+        let mut res = sum + (msb != 0);
         if res >= Self::ORDER {
             res -= Self::ORDER;
         }
@@ -80,13 +69,13 @@ impl Mersenne31Field {
 
 impl Default for Mersenne31Field {
     fn default() -> Self {
-        Self(0u32)
+        Self(0u64)
     }
 }
 
 impl PartialEq for Mersenne31Field {
     fn eq(&self, other: &Self) -> bool {
-        self.to_reduced_u32() == other.to_reduced_u32()
+        self.0 == other.0
     }
 }
 impl Eq for Mersenne31Field {}
@@ -99,7 +88,7 @@ impl Hash for Mersenne31Field {
 
 impl Ord for Mersenne31Field {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.to_reduced_u32().cmp(&other.to_reduced_u32())
+        self.0.cmp(&other.0)
     }
 }
 
@@ -127,7 +116,7 @@ impl Field for Mersenne31Field {
 
     #[inline(always)]
     fn is_zero(&self) -> bool {
-        self.to_reduced_u32() == 0
+        self.0 == 0
     }
 
     fn inverse(&self) -> Option<Self> {
@@ -167,43 +156,33 @@ impl Field for Mersenne31Field {
         p1111111111111111111111111111101.exp_power_of_2(3);
         p1111111111111111111111111111101.mul_assign(&p101);
         Some(p1111111111111111111111111111101)
-
-        //Some(self.pow(Mersenne31Field::ORDER - 2))
     }
 
     fn add_assign(&'_ mut self, other: &Self) -> &'_ mut Self {
-        let mut sum = self.0.wrapping_add(other.0);
-        let msb = sum & Self::MSBITMASK;
-        sum.bitxor_assign(msb);
-        sum += u32::from(msb != 0);
-        // todo: investigate, without it it doesn't even work
-        // if sum >= Self::ORDER {
-        //     sum -= Self::ORDER;
-        // }
-        self.0 = sum;
-
+        let sum = self.0.wrapping_add(other.0);
+        // cond select of result based on overflow
+        // avoids branching but idk if this is really that efficient
+        let of = self.0 >= Self::ORDER;
+        let reduced = self.0.wrapping_sub(Self::ORDER);
+        let mask = 0.wrapping_sub(of as u64);
+        self.0 = sum ^ (mask & (sum ^ reduced));
         self
     }
 
     fn sub_assign(&'_ mut self, other: &Self) -> &'_ mut Self {
-        let mut sum = self.0.wrapping_sub(other.0);
-        let msb = sum & (1 << 31);
-        sum.bitxor_assign(msb);
-        sum -= u32::from(msb != 0);
-        // if sum >= Self::ORDER {
-        //     sum -= Self::ORDER;
-        // }
-        self.0 = sum;
-
+        self.0 = self.0.wrapping_sub(other.0);
+        let msb = self.0 & Self::MSBITMASK;
+        self.0 ^= msb;
+        self.0 -= (msb != 0) as u64;
         self
     }
 
     fn mul_assign(&'_ mut self, other: &Self) -> &'_ mut Self {
-        let product = u64::from(self.0) * u64::from(other.0);
-        let product_low = (product as u32) & ((1 << 31) - 1);
-        let product_high = (product >> 31) as u32;
-        *self = Self(product_low);
-        self.add_assign(&Self(product_high));
+        let product = self.0 * other.0; // since we're using u64 no need to care about overflow or
+                                        // casting
+        let product_low = product & Self::ORDER;
+        let product_high = product >> 31;
+        self.0 = product_low.add_assign(product_high);
         self
     }
 
@@ -213,31 +192,18 @@ impl Field for Mersenne31Field {
 
     #[inline(always)]
     fn negate(&'_ mut self) -> &'_ mut Self {
-        if self.is_zero() == false {
-            *self = Self(Self::ORDER - self.to_reduced_u32());
+        if !self.0.is_zero() {
+            self.0 = Self::ORDER - self.0;
         }
-
         self
     }
 
     fn double(&'_ mut self) -> &'_ mut Self {
-        let mut sum = self.0 << 1;
-        let msb = sum & Self::MSBITMASK;
-        sum.bitxor_assign(msb);
-        sum += u32::from(msb != 0);
-        //if sum >= Self::ORDER { sum -= Self::ORDER };
-        self.0 = sum;
-
+        self = self.mul_2exp_u64(1);
         self
     }
 
-    // TODO: could be optimized a little further?
-    fn mul_by_two(&'_ mut self) -> &'_ mut Self {
-        *self = self.mul_2exp_u64(1);
-        self
-    }
-
-    fn div_by_two(&'_ mut self) -> &'_ mut Self {
+    fn div2(&'_ mut self) -> &'_ mut Self {
         *self = self.div_2exp_u64(1);
         self
     }
@@ -252,26 +218,25 @@ impl PrimeField for Mersenne31Field {
 
     #[inline(always)]
     fn as_u64(self) -> u64 {
-        self.0 as u64
+        self.0
     }
 
     #[inline(always)]
     fn from_u64_unchecked(value: u64) -> Self {
-        Self::new(value.try_into().expect("Too large"))
+        Self::new(value)
     }
     #[inline(always)]
     fn from_u64(value: u64) -> Option<Self> {
-        if value as u32 >= Self::ORDER {
+        if value >= Self::ORDER {
             None
         } else {
-            Some(Self(value as u32))
+            Some(Self(value))
         }
     }
 
     #[inline(always)]
     fn from_u64_with_reduction(value: u64) -> Self {
-        let val_as_u32 = value as u32;
-        Self(val_as_u32 % Self::ORDER)
+        Self(val % Self::ORDER)
     }
 
     #[inline(always)]
@@ -280,9 +245,8 @@ impl PrimeField for Mersenne31Field {
     }
 
     fn as_boolean(&self) -> bool {
-        let as_uint = self.to_reduced_u32();
-        assert!(as_uint == 0 || as_uint == 1);
-        as_uint != 0
+        assert!(self.0 == 0 || self.0 == 1);
+        self.0 != 0
     }
 
     fn from_boolean(flag: bool) -> Self {
@@ -437,12 +401,12 @@ impl FieldExtension<Mersenne31Field> for Mersenne31Quartic {
 }
 
 pub fn rand_fp_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Field {
-    Mersenne31Field::from_u64_unchecked(rng.gen_range(0..((1 << 31) - 1)))
+    Mersenne31Field::from_u64_unchecked(rng.gen_range(0..Mersenne31Field::ORDER))
 }
 
 pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Complex {
-    let a = Mersenne31Field::from_u64_unchecked(rng.gen_range(0..((1 << 31) - 1)));
-    let b = Mersenne31Field::from_u64_unchecked(rng.gen_range(0..((1 << 31) - 1)));
+    let a = Mersenne31Field::from_u64_unchecked(rng.gen_range(0..Mersenne31Field::ORDER));
+    let b = Mersenne31Field::from_u64_unchecked(rng.gen_range(0..Mersenne31Field::ORDER));
     Mersenne31Complex::new(a, b)
 }
 
