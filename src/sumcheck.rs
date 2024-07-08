@@ -16,8 +16,14 @@ fn do_sumcheck<F: Field, T: Transcript<F>>(
 
     let mut poly = poly.clone();
     let mut claimed_sum = claimed_sum.clone();
-    for _ in 0..n_rounds {
-        let evals = do_sumcheck_round(&mut challenge, &mut poly, &mut claimed_sum, &mut transcript);
+    for round in 0..n_rounds {
+        let evals = do_sumcheck_round(
+            &mut challenge,
+            &mut poly,
+            &mut claimed_sum,
+            &mut transcript,
+            round + 1,
+        );
         transcript.witness_field_elements(&evals);
         proofs.push(evals);
         challenge = Some(transcript.get_challenge());
@@ -32,12 +38,31 @@ fn do_sumcheck_round<F: Field, T: Transcript<F>>(
     poly: &mut MultilinearExtension<F>,
     sum: &mut F,
     transcript: &mut T,
-) -> Vec<F> {
+    round: usize,
+) -> Result<Vec<F>, SumcheckError> {
     // If we have some challenge, we first need to fix the polynomial on that challenge.
     if let Some(c) = challenge {
-        // TODO: check round
+        if round == 1 {
+            return Err(SumcheckError::ChallengeOnFirstRound);
+        }
+
         poly = poly.fix_variable(c);
+    } else {
+        if round > 1 {
+            return Err(SumcheckError::ExpectedChallenge);
+        }
     }
 
     // Here is where we do the meat of the sumcheck.
+    // We want to sum up all the evaluations of the polynomial `f` except for those at the variable
+    // at `round`. We assume lexicographic ordering, so poly[0] and poly[1] will be f(0, 0, ..., 0)
+    // and f(1, 0, ..., 0).
+    let evals_0 = F::ZERO;
+    let evals_1 = F::ZERO;
+    for i in (poly.num_vars() - 1) {
+        evals_0.add_assign(&poly.eval(i << 1));
+        evals_1.add_assign(&poly.eval((i << 1) + 1));
+    }
+
+    vec![evals_0, evals_1]
 }
