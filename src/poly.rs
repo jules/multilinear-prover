@@ -33,6 +33,7 @@ impl<F: Field> MultilinearPoly<F> {
         };
 
         // TODO: par
+        // TODO: binius highly optimizes this
         for i in 0..(1 << (new.num_vars)) {
             new.evals
                 .push(self.evals[i] + (self.evals[(i << 1) + 1] - self.evals[i << 1]) * point);

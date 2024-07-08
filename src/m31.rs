@@ -1,3 +1,5 @@
+// taken mostly from air compiler
+
 use crate::field::*;
 use crate::prover::engine::Engine;
 use core::fmt::Debug;
@@ -16,7 +18,7 @@ pub struct Mersenne31Field(pub u64);
 
 impl Mersenne31Field {
     pub const ORDER: u64 = (1 << 31) - 1;
-    pub const MSBITMASK: u64 = (u32::MAX as u64) << 32 + 1 << 31;
+    pub const MSBITMASK: u64 = ((u32::MAX as u64) << 32) + (1 << 31);
 
     pub const fn new(value: u64) -> Self {
         debug_assert!(value < Self::ORDER);
