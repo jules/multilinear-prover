@@ -4,7 +4,7 @@ pub struct SumcheckProof<F: Field> {
 }
 
 fn do_sumcheck<F: Field, T: Transcript<F>>(
-    poly: MultilinearPoly<F>,
+    poly: MultilinearExtension<F>,
     claimed_sum: F,
     transcript: &mut T,
 ) -> Result<SumcheckProof, SumcheckError> {
@@ -29,7 +29,7 @@ fn do_sumcheck<F: Field, T: Transcript<F>>(
 
 fn do_sumcheck_round<F: Field, T: Transcript<F>>(
     challenge: &mut Option<F>,
-    poly: &mut MultilinearPoly<F>,
+    poly: &mut MultilinearExtension<F>,
     sum: &mut F,
     transcript: &mut T,
 ) -> Vec<F> {
