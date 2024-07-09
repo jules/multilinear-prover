@@ -1,5 +1,7 @@
+use crate::field::Field;
+
 /// A multilinear polynomial represented in the Lagrange basis.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MultilinearExtension<F: Field> {
     num_vars: usize,
     pub evals: Vec<F>,
@@ -9,7 +11,7 @@ impl<F: Field> MultilinearExtension<F> {
     pub fn new(evals: Vec<F>) -> Self {
         debug_assert!(evals.len().is_power_of_two());
         Self {
-            num_vars: f64::log2(evals.len()) as usize,
+            num_vars: (evals.len() as f64).log2() as usize,
             evals,
         }
     }

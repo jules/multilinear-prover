@@ -1,12 +1,11 @@
 // taken mostly from air compiler
 
 use crate::field::*;
-use crate::prover::engine::Engine;
-use core::fmt::Debug;
-use core::fmt::Display;
-use core::fmt::Formatter;
-use core::hash::Hash;
-use core::hash::Hasher;
+use core::{
+    fmt::{Debug, Display, Formatter},
+    hash::{Hash, Hasher},
+    ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -69,49 +68,6 @@ impl Mersenne31Field {
     }
 }
 
-impl Default for Mersenne31Field {
-    fn default() -> Self {
-        Self(0u64)
-    }
-}
-
-impl PartialEq for Mersenne31Field {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-impl Eq for Mersenne31Field {}
-
-impl Hash for Mersenne31Field {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.to_reduced_u32())
-    }
-}
-
-impl Ord for Mersenne31Field {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp(&other.0)
-    }
-}
-
-impl PartialOrd for Mersenne31Field {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Display for Mersenne31Field {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
-    }
-}
-
-impl Debug for Mersenne31Field {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.0, f)
-    }
-}
-
 impl Field for Mersenne31Field {
     const ZERO: Self = Self(0);
     const ONE: Self = Self(1);
@@ -160,54 +116,125 @@ impl Field for Mersenne31Field {
         Some(p1111111111111111111111111111101)
     }
 
-    fn add_assign(&'_ mut self, other: &Self) -> &'_ mut Self {
-        let sum = self.0.wrapping_add(other.0);
+    fn square(&self) -> Self {
+        *self * self
+    }
+
+    fn double(&self) -> Self {
+        self.mul_2exp_u64(1)
+    }
+
+    fn div2(&self) -> Self {
+        self.div_2exp_u64(1)
+    }
+}
+
+impl Neg for Mersenne31Field {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        if !self.0.is_zero() {
+            Self(Self::ORDER - self.0)
+        } else {
+            self
+        }
+    }
+}
+
+impl Add<Self> for Mersenne31Field {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let sum = self.0.wrapping_add(rhs.0);
         // cond select of result based on overflow
         // avoids branching but idk if this is really that efficient
         let of = self.0 >= Self::ORDER;
         let reduced = self.0.wrapping_sub(Self::ORDER);
         let mask = 0.wrapping_sub(of as u64);
-        self.0 = sum ^ (mask & (sum ^ reduced));
-        self
+        Self(sum ^ (mask & (sum ^ reduced)))
     }
+}
 
-    fn sub_assign(&'_ mut self, other: &Self) -> &'_ mut Self {
-        self.0 = self.0.wrapping_sub(other.0);
-        let msb = self.0 & Self::MSBITMASK;
-        self.0 ^= msb;
-        self.0 -= (msb != 0) as u64;
-        self
+impl Add<&Self> for Mersenne31Field {
+    type Output = Self;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        self + *rhs
     }
+}
 
-    fn mul_assign(&'_ mut self, other: &Self) -> &'_ mut Self {
-        let product = self.0 * other.0; // since we're using u64 no need to care about overflow or
-                                        // casting
+impl Sub<Self> for Mersenne31Field {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let mut res = self.0.wrapping_sub(rhs.0);
+        let msb = res & Self::MSBITMASK;
+        res ^= msb;
+        Self(res - (msb != 0) as u64)
+    }
+}
+
+impl Sub<&Self> for Mersenne31Field {
+    type Output = Self;
+
+    fn sub(self, rhs: &Self) -> Self::Output {
+        self - *rhs
+    }
+}
+
+impl Mul<Self> for Mersenne31Field {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let product = self.0 * rhs.0; // since we're using u64 no need to care about overflow or
+                                      // casting
         let product_low = product & Self::ORDER;
         let product_high = product >> 31;
-        self.0 = product_low.add_assign(product_high);
-        self
+        Self(product_low + product_high);
     }
+}
 
-    fn square(&'_ mut self) -> &'_ mut Self {
-        self.mul_assign(&self.clone())
+impl Mul<&Self> for Mersenne31Field {
+    type Output = Self;
+
+    fn mul(self, rhs: &Self) -> Self::Output {
+        self * *rhs
     }
+}
 
-    #[inline(always)]
-    fn negate(&'_ mut self) -> &'_ mut Self {
-        if !self.0.is_zero() {
-            self.0 = Self::ORDER - self.0;
-        }
-        self
+impl AddAssign<Self> for Mersenne31Field {
+    fn add_assign(&mut self, other: Self) {
+        *self = *self + other;
     }
+}
 
-    fn double(&'_ mut self) -> &'_ mut Self {
-        self = self.mul_2exp_u64(1);
-        self
+impl AddAssign<&Self> for Mersenne31Field {
+    fn add_assign(&mut self, other: &Self) {
+        *self = *self + *other;
     }
+}
 
-    fn div2(&'_ mut self) -> &'_ mut Self {
-        *self = self.div_2exp_u64(1);
-        self
+impl SubAssign<Self> for Mersenne31Field {
+    fn sub_assign(&mut self, other: Self) {
+        *self = *self - other;
+    }
+}
+
+impl SubAssign<&Self> for Mersenne31Field {
+    fn sub_assign(&mut self, other: &Self) {
+        *self = *self - *other;
+    }
+}
+
+impl MulAssign<Self> for Mersenne31Field {
+    fn mul_assign(&mut self, other: Self) {
+        *self = *self * other;
+    }
+}
+
+impl MulAssign<&Self> for Mersenne31Field {
+    fn mul_assign(&mut self, other: &Self) {
+        *self = *self * *other;
     }
 }
 
@@ -238,7 +265,7 @@ impl PrimeField for Mersenne31Field {
 
     #[inline(always)]
     fn from_u64_with_reduction(value: u64) -> Self {
-        Self(val % Self::ORDER)
+        Self(value % Self::ORDER)
     }
 
     #[inline(always)]
@@ -412,6 +439,7 @@ pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Complex {
     Mersenne31Complex::new(a, b)
 }
 
+/*
 pub struct Mersenne31Engine {}
 
 impl Engine for Mersenne31Engine {
@@ -446,6 +474,50 @@ impl Engine for Mersenne31Engine {
             Mersenne31Field::new(2105104135),
         ],
     };
+}
+*/
+
+impl Default for Mersenne31Field {
+    fn default() -> Self {
+        Self(0u64)
+    }
+}
+
+impl PartialEq for Mersenne31Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for Mersenne31Field {}
+
+impl Hash for Mersenne31Field {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.to_reduced_u32())
+    }
+}
+
+impl Ord for Mersenne31Field {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl PartialOrd for Mersenne31Field {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Display for Mersenne31Field {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
+impl Debug for Mersenne31Field {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.0, f)
+    }
 }
 
 impl std::fmt::Debug for Mersenne31Complex {

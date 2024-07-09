@@ -1,3 +1,10 @@
+use crate::{field::Field, mle::MultilinearExtension, transcript::Transcript};
+
+pub enum SumcheckError {
+    ExpectedChallenge,
+    ChallengeOnFirstRound,
+}
+
 pub struct SumcheckProof<F: Field> {
     challenges: Vec<F>,
     proofs: Vec<Vec<F>>,
@@ -17,27 +24,20 @@ pub fn prove<F: Field, T: Transcript<F>>(
     let mut poly = poly.clone();
     let mut claimed_sum = claimed_sum.clone();
     for round in 0..n_rounds {
-        let evals = do_sumcheck_round(
-            &mut challenge,
-            &mut poly,
-            &mut claimed_sum,
-            &mut transcript,
-            round + 1,
-        );
-        transcript.witness_field_elements(&evals);
+        let evals = do_sumcheck_round(&mut challenge, &mut poly, &mut claimed_sum, round + 1)?;
+        transcript.observe_witnesses(&evals);
         proofs.push(evals);
-        challenge = Some(transcript.get_challenge());
+        challenge = Some(transcript.draw_challenge());
         challenges.push(challenge);
     }
 
     Ok(SumcheckProof { challenges, proofs })
 }
 
-fn do_sumcheck_round<F: Field, T: Transcript<F>>(
+fn do_sumcheck_round<F: Field>(
     challenge: &mut Option<F>,
     poly: &mut MultilinearExtension<F>,
     sum: &mut F,
-    transcript: &mut T,
     round: usize,
 ) -> Result<Vec<F>, SumcheckError> {
     // If we have some challenge, we first need to fix the polynomial on that challenge.
@@ -46,7 +46,7 @@ fn do_sumcheck_round<F: Field, T: Transcript<F>>(
             return Err(SumcheckError::ChallengeOnFirstRound);
         }
 
-        poly = poly.fix_variable(c);
+        *poly = poly.fix_variable(*c);
     } else {
         if round > 1 {
             return Err(SumcheckError::ExpectedChallenge);
@@ -57,14 +57,14 @@ fn do_sumcheck_round<F: Field, T: Transcript<F>>(
     // We want to sum up all the evaluations of the polynomial `f` except for those at the variable
     // at `round`. We assume lexicographic ordering, so poly[0] and poly[1] will be f(0, 0, ..., 0)
     // and f(1, 0, ..., 0).
-    let evals_0 = F::ZERO;
-    let evals_1 = F::ZERO;
-    for i in (poly.num_vars() - 1) {
-        evals_0.add_assign(&poly.eval(i << 1));
-        evals_1.add_assign(&poly.eval((i << 1) + 1));
+    let mut evals_0 = F::ZERO;
+    let mut evals_1 = F::ZERO;
+    for i in 0..poly.num_vars() - 1 {
+        evals_0 += poly.eval(i << 1);
+        evals_1 += poly.eval((i << 1) + 1);
     }
 
-    vec![evals_0, evals_1]
+    Ok(vec![evals_0, evals_1])
 }
 
 pub fn verify<F: Field, T: Transcript<F>>(
@@ -72,4 +72,5 @@ pub fn verify<F: Field, T: Transcript<F>>(
     transcript: T,
 ) -> Result<bool, SumcheckError> {
     // interpolate the lines on each sumcheck round and check low degree
+    Ok(false)
 }
