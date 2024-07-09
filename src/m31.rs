@@ -60,7 +60,7 @@ impl Mersenne31Field {
         let msb = res_wrapped & Self::MSBITMASK;
         let mut sum = res_wrapped;
         sum ^= msb;
-        let mut res = sum + (msb != 0);
+        let mut res = sum + (msb != 0) as u64;
         if res >= Self::ORDER {
             res -= Self::ORDER;
         }
@@ -86,33 +86,33 @@ impl Field for Mersenne31Field {
 
         let mut p101 = *self;
         p101.exp_power_of_2(2);
-        p101.mul_assign(&self);
+        p101 *= self;
 
         let mut p1111 = p101;
         p1111.square();
-        p1111.mul_assign(&p101);
+        p1111 *= p101;
 
         let mut p11111111 = p1111;
         p11111111.exp_power_of_2(4);
-        p11111111.mul_assign(&p1111);
+        p11111111 *= p1111;
 
         let mut p111111110000 = p11111111;
         p111111110000.exp_power_of_2(4);
 
         let mut p111111111111 = p111111110000;
-        p111111111111.mul_assign(&p1111);
+        p111111111111 *= p1111;
 
         let mut p1111111111111111 = p111111110000;
         p1111111111111111.exp_power_of_2(4);
-        p1111111111111111.mul_assign(&p11111111);
+        p1111111111111111 *= p11111111;
 
         let mut p1111111111111111111111111111 = p1111111111111111;
         p1111111111111111111111111111.exp_power_of_2(12);
-        p1111111111111111111111111111.mul_assign(&p111111111111);
+        p1111111111111111111111111111 *= p111111111111;
 
         let mut p1111111111111111111111111111101 = p1111111111111111111111111111;
         p1111111111111111111111111111101.exp_power_of_2(3);
-        p1111111111111111111111111111101.mul_assign(&p101);
+        p1111111111111111111111111111101 *= p101;
         Some(p1111111111111111111111111111101)
     }
 
@@ -133,7 +133,7 @@ impl Neg for Mersenne31Field {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        if !self.0.is_zero() {
+        if !self.is_zero() {
             Self(Self::ORDER - self.0)
         } else {
             self
@@ -150,7 +150,7 @@ impl Add<Self> for Mersenne31Field {
         // avoids branching but idk if this is really that efficient
         let of = self.0 >= Self::ORDER;
         let reduced = self.0.wrapping_sub(Self::ORDER);
-        let mask = 0.wrapping_sub(of as u64);
+        let mask = 0u64.wrapping_sub(of as u64);
         Self(sum ^ (mask & (sum ^ reduced)))
     }
 }
@@ -190,7 +190,7 @@ impl Mul<Self> for Mersenne31Field {
                                       // casting
         let product_low = product & Self::ORDER;
         let product_high = product >> 31;
-        Self(product_low + product_high);
+        Self(product_low) + Self(product_high)
     }
 }
 
@@ -241,7 +241,7 @@ impl MulAssign<&Self> for Mersenne31Field {
 impl PrimeField for Mersenne31Field {
     const TWO: Self = Self(2);
     const MINUS_ONE: Self = Self(Self::ORDER - 1);
-    const NUM_BYTES_IN_REPR: usize = 4;
+    const NUM_BYTES_IN_REPR: usize = 8;
     const CHAR_BITS: usize = 31;
     const CHARACTERISTICS: u64 = Self::ORDER as u64;
 
@@ -295,6 +295,7 @@ impl PrimeField for Mersenne31Field {
     }
 }
 
+/*
 impl BaseField for Mersenne31Field {
     const QUADRATIC_NON_RESIDUE: Mersenne31Field = Mersenne31Field::MINUS_ONE;
 
@@ -476,6 +477,7 @@ impl Engine for Mersenne31Engine {
     };
 }
 */
+*/
 
 impl Default for Mersenne31Field {
     fn default() -> Self {
@@ -520,6 +522,7 @@ impl Debug for Mersenne31Field {
     }
 }
 
+/*
 impl std::fmt::Debug for Mersenne31Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "F2[{}, {}]", self.coeffs[0], self.coeffs[1])
@@ -557,3 +560,4 @@ impl std::fmt::Display for Mersenne31Quartic {
         )
     }
 }
+*/

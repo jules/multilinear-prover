@@ -14,10 +14,9 @@ pub fn prove<F: Field, T: Transcript<F>>(
     poly: MultilinearExtension<F>,
     claimed_sum: F,
     transcript: &mut T,
-) -> Result<SumcheckProof, SumcheckError> {
+) -> Result<SumcheckProof<F>, SumcheckError> {
     let mut challenge: Option<F> = None;
     let n_rounds = poly.num_vars();
-    transcript.witness_field_element(F::from_u64_unchecked(n_rounds));
     let mut challenges = Vec::with_capacity(n_rounds);
     let mut proofs = Vec::with_capacity(n_rounds);
 
@@ -27,8 +26,9 @@ pub fn prove<F: Field, T: Transcript<F>>(
         let evals = do_sumcheck_round(&mut challenge, &mut poly, &mut claimed_sum, round + 1)?;
         transcript.observe_witnesses(&evals);
         proofs.push(evals);
-        challenge = Some(transcript.draw_challenge());
-        challenges.push(challenge);
+        let c = transcript.draw_challenge();
+        challenges.push(c);
+        challenge = Some(c);
     }
 
     Ok(SumcheckProof { challenges, proofs })
@@ -68,9 +68,10 @@ fn do_sumcheck_round<F: Field>(
 }
 
 pub fn verify<F: Field, T: Transcript<F>>(
-    proof: SumcheckProof,
+    proof: SumcheckProof<F>,
     transcript: T,
 ) -> Result<bool, SumcheckError> {
     // interpolate the lines on each sumcheck round and check low degree
+    // TODO
     Ok(false)
 }

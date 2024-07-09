@@ -102,6 +102,7 @@ pub trait PrimeField: Field {
     fn increment_unchecked(&'_ mut self);
 }
 
+/*
 // this field can be used as base field for quadratic extension
 pub trait BaseField: Field {
     const QUADRATIC_NON_RESIDUE: Self;
@@ -420,6 +421,7 @@ pub trait TwoAdicField: Field {
     #[must_use]
     fn two_adic_group_order() -> usize;
 }
+*/
 
 pub trait Rand {
     fn random_element<R: Rng + ?Sized>(rng: &mut R) -> Self;
@@ -431,6 +433,7 @@ impl<F: PrimeField> Rand for F {
     }
 }
 
+/*
 impl<F: Field + Rand, const DEGREE: usize> Rand for ExtensionField<F, DEGREE> {
     fn random_element<R: Rng + ?Sized>(rng: &mut R) -> Self {
         Self {
@@ -438,3 +441,4 @@ impl<F: Field + Rand, const DEGREE: usize> Rand for ExtensionField<F, DEGREE> {
         }
     }
 }
+*/
