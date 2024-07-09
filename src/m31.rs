@@ -13,6 +13,9 @@ use core::{
 // NOTE: using a 64 bit register shouldn't affect performance on 64-bit processors (which is
 // where i assume most CPU provers will run) but should save us small extra costs incurred from
 // register truncation and expansion in for example multiplications.
+//
+// XXX: since we use such a large register, lazy reduction could be really viable but only for
+// additions/subtractions (does reduction still get to use the same hack in this case?)
 pub struct Mersenne31Field(pub u64);
 
 impl Mersenne31Field {

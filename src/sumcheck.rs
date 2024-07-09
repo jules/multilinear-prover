@@ -72,6 +72,12 @@ pub fn verify<F: Field, T: Transcript<F>>(
     transcript: T,
 ) -> Result<bool, SumcheckError> {
     // interpolate the lines on each sumcheck round and check low degree
-    // TODO
+    // TODO: sums
+    let SumcheckProof { challenges, proofs } = proof;
+    challenges.iter().zip(proofs.iter()).for_each(|(c, p)| {
+        let poly = interpolate(p);
+        poly.eval(c);
+    });
+
     Ok(false)
 }
