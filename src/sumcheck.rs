@@ -3,7 +3,7 @@ pub struct SumcheckProof<F: Field> {
     proofs: Vec<Vec<F>>,
 }
 
-fn do_sumcheck<F: Field, T: Transcript<F>>(
+pub fn prove<F: Field, T: Transcript<F>>(
     poly: MultilinearExtension<F>,
     claimed_sum: F,
     transcript: &mut T,
@@ -65,4 +65,11 @@ fn do_sumcheck_round<F: Field, T: Transcript<F>>(
     }
 
     vec![evals_0, evals_1]
+}
+
+pub fn verify<F: Field, T: Transcript<F>>(
+    proof: SumcheckProof,
+    transcript: T,
+) -> Result<bool, SumcheckError> {
+    // interpolate the lines on each sumcheck round and check low degree
 }
