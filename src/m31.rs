@@ -16,9 +16,9 @@ use core::{
 //
 // XXX: since we use such a large register, lazy reduction could be really viable but only for
 // additions/subtractions (does reduction still get to use the same hack in this case?)
-pub struct Mersenne31Field(pub u64);
+pub struct M31(pub u64);
 
-impl Mersenne31Field {
+impl M31 {
     pub const ORDER: u64 = (1 << 31) - 1;
     pub const MSBITMASK: u64 = ((u32::MAX as u64) << 32) + (1 << 31);
 
@@ -67,11 +67,11 @@ impl Mersenne31Field {
         if res >= Self::ORDER {
             res -= Self::ORDER;
         }
-        Mersenne31Field(res)
+        M31(res)
     }
 }
 
-impl Field for Mersenne31Field {
+impl Field for M31 {
     const ZERO: Self = Self(0);
     const ONE: Self = Self(1);
 
@@ -138,7 +138,7 @@ impl Field for Mersenne31Field {
     }
 }
 
-impl Neg for Mersenne31Field {
+impl Neg for M31 {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -150,7 +150,7 @@ impl Neg for Mersenne31Field {
     }
 }
 
-impl Add<Self> for Mersenne31Field {
+impl Add<Self> for M31 {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -164,7 +164,7 @@ impl Add<Self> for Mersenne31Field {
     }
 }
 
-impl Add<&Self> for Mersenne31Field {
+impl Add<&Self> for M31 {
     type Output = Self;
 
     fn add(self, rhs: &Self) -> Self::Output {
@@ -172,7 +172,7 @@ impl Add<&Self> for Mersenne31Field {
     }
 }
 
-impl Sub<Self> for Mersenne31Field {
+impl Sub<Self> for M31 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -183,7 +183,7 @@ impl Sub<Self> for Mersenne31Field {
     }
 }
 
-impl Sub<&Self> for Mersenne31Field {
+impl Sub<&Self> for M31 {
     type Output = Self;
 
     fn sub(self, rhs: &Self) -> Self::Output {
@@ -191,7 +191,7 @@ impl Sub<&Self> for Mersenne31Field {
     }
 }
 
-impl Mul<Self> for Mersenne31Field {
+impl Mul<Self> for M31 {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -203,7 +203,7 @@ impl Mul<Self> for Mersenne31Field {
     }
 }
 
-impl Mul<&Self> for Mersenne31Field {
+impl Mul<&Self> for M31 {
     type Output = Self;
 
     fn mul(self, rhs: &Self) -> Self::Output {
@@ -211,43 +211,43 @@ impl Mul<&Self> for Mersenne31Field {
     }
 }
 
-impl AddAssign<Self> for Mersenne31Field {
+impl AddAssign<Self> for M31 {
     fn add_assign(&mut self, other: Self) {
         *self = *self + other;
     }
 }
 
-impl AddAssign<&Self> for Mersenne31Field {
+impl AddAssign<&Self> for M31 {
     fn add_assign(&mut self, other: &Self) {
         *self = *self + *other;
     }
 }
 
-impl SubAssign<Self> for Mersenne31Field {
+impl SubAssign<Self> for M31 {
     fn sub_assign(&mut self, other: Self) {
         *self = *self - other;
     }
 }
 
-impl SubAssign<&Self> for Mersenne31Field {
+impl SubAssign<&Self> for M31 {
     fn sub_assign(&mut self, other: &Self) {
         *self = *self - *other;
     }
 }
 
-impl MulAssign<Self> for Mersenne31Field {
+impl MulAssign<Self> for M31 {
     fn mul_assign(&mut self, other: Self) {
         *self = *self * other;
     }
 }
 
-impl MulAssign<&Self> for Mersenne31Field {
+impl MulAssign<&Self> for M31 {
     fn mul_assign(&mut self, other: &Self) {
         *self = *self * *other;
     }
 }
 
-impl PrimeField for Mersenne31Field {
+impl PrimeField for M31 {
     const TWO: Self = Self(2);
     const MINUS_ONE: Self = Self(Self::ORDER - 1);
     const NUM_BYTES_IN_REPR: usize = 8;
@@ -305,28 +305,28 @@ impl PrimeField for Mersenne31Field {
 }
 
 /*
-impl BaseField for Mersenne31Field {
-    const QUADRATIC_NON_RESIDUE: Mersenne31Field = Mersenne31Field::MINUS_ONE;
+impl BaseField for M31 {
+    const QUADRATIC_NON_RESIDUE: M31 = M31::MINUS_ONE;
 
     fn mul_by_non_residue(elem: &mut Self) {
         elem.negate();
     }
 }
 
-pub type Mersenne31Complex = ExtensionField<Mersenne31Field, 2>;
+pub type Mersenne31Complex = ExtensionField<M31, 2>;
 
 impl Mersenne31Complex {
-    pub const fn new(real: Mersenne31Field, imag: Mersenne31Field) -> Self {
+    pub const fn new(real: M31, imag: M31) -> Self {
         Self {
             coeffs: [real, imag],
         }
     }
 
-    pub fn real_part(&self) -> Mersenne31Field {
+    pub fn real_part(&self) -> M31 {
         self.coeffs[0]
     }
 
-    pub fn imag_part(&self) -> Mersenne31Field {
+    pub fn imag_part(&self) -> M31 {
         self.coeffs[1]
     }
 
@@ -346,7 +346,7 @@ impl Mersenne31Complex {
 impl BaseField for Mersenne31Complex {
     // 2 + i is non-residue
     const QUADRATIC_NON_RESIDUE: Mersenne31Complex = Mersenne31Complex {
-        coeffs: [Mersenne31Field::TWO, Mersenne31Field::ONE],
+        coeffs: [M31::TWO, M31::ONE],
     };
 
     fn mul_by_non_residue(elem: &mut Self) {
@@ -371,8 +371,8 @@ impl TwoAdicField for Mersenne31Complex {
     fn two_adic_generator() -> Self {
         // element of order p+1 - generator of cicrcle group
         Self::from_coeffs_in_base(&[
-            Mersenne31Field::new(311014874),
-            Mersenne31Field::new(1584694829),
+            M31::new(311014874),
+            M31::new(1584694829),
         ])
     }
 
@@ -382,70 +382,70 @@ impl TwoAdicField for Mersenne31Complex {
 }
 
 // TODO: for now it is a dirty hack and should definitely be derived automatically
-impl FieldExtension<Mersenne31Field> for Mersenne31Quartic {
+impl FieldExtension<M31> for Mersenne31Quartic {
     const DEGREE: usize = 4;
 
-    fn mul_assign_by_base(&mut self, elem: &Mersenne31Field) -> &mut Self {
+    fn mul_assign_by_base(&mut self, elem: &M31) -> &mut Self {
         self.coeffs.iter_mut().for_each(|coef| {
             coef.mul_assign_by_base(elem);
         });
         self
     }
 
-    fn into_coeffs_in_base(self) -> [Mersenne31Field; 4] {
+    fn into_coeffs_in_base(self) -> [M31; 4] {
         let Mersenne31Quartic { coeffs } = self;
         let [c0, c1] = coeffs[0].into_coeffs_in_base();
         let [c2, c3] = coeffs[1].into_coeffs_in_base();
         [c0, c1, c2, c3]
     }
 
-    fn from_coeffs_in_base(coefs: &[Mersenne31Field]) -> Self {
+    fn from_coeffs_in_base(coefs: &[M31]) -> Self {
         let c0 = Mersenne31Complex::from_coeffs_in_base(&coefs[0..2]);
         let c1 = Mersenne31Complex::from_coeffs_in_base(&coefs[2..4]);
         Self { coeffs: [c0, c1] }
     }
 
     #[inline(always)]
-    fn from_coeffs_in_base_ref(coeffs: &[&Mersenne31Field]) -> Self {
+    fn from_coeffs_in_base_ref(coeffs: &[&M31]) -> Self {
         let c0 = Mersenne31Complex::from_coeffs_in_base_ref(&coeffs[0..2]);
         let c1 = Mersenne31Complex::from_coeffs_in_base_ref(&coeffs[2..4]);
         Self { coeffs: [c0, c1] }
     }
 
-    fn coeffs_in_base(&self) -> &[Mersenne31Field] {
-        unsafe { std::mem::transmute::<&[Mersenne31Complex], &[Mersenne31Field]>(&self.coeffs) }
+    fn coeffs_in_base(&self) -> &[M31] {
+        unsafe { std::mem::transmute::<&[Mersenne31Complex], &[M31]>(&self.coeffs) }
     }
 
-    fn add_assign_base(&mut self, elem: &Mersenne31Field) -> &mut Self {
+    fn add_assign_base(&mut self, elem: &M31) -> &mut Self {
         self.coeffs[0].add_assign_base(elem);
         self
     }
 
-    fn sub_assign_base(&mut self, elem: &Mersenne31Field) -> &mut Self {
+    fn sub_assign_base(&mut self, elem: &M31) -> &mut Self {
         self.coeffs[0].sub_assign_base(elem);
         self
     }
 
-    fn from_base(elem: Mersenne31Field) -> Self {
+    fn from_base(elem: M31) -> Self {
         let c0 = Mersenne31Complex::from_base(elem);
         Self {
             coeffs: [c0, Mersenne31Complex::ZERO],
         }
     }
 
-    fn get_coef_mut(&mut self, idx: usize) -> &mut Mersenne31Field {
+    fn get_coef_mut(&mut self, idx: usize) -> &mut M31 {
         let major_idx = if idx < 2 { 0 } else { 1 };
         self.coeffs[major_idx].get_coef_mut(idx % 2)
     }
 }
 
-pub fn rand_fp_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Field {
-    Mersenne31Field::from_u64_unchecked(rng.gen_range(0..Mersenne31Field::ORDER))
+pub fn rand_fp_from_rng<R: rand::Rng>(rng: &mut R) -> M31 {
+    M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER))
 }
 
 pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Complex {
-    let a = Mersenne31Field::from_u64_unchecked(rng.gen_range(0..Mersenne31Field::ORDER));
-    let b = Mersenne31Field::from_u64_unchecked(rng.gen_range(0..Mersenne31Field::ORDER));
+    let a = M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER));
+    let b = M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER));
     Mersenne31Complex::new(a, b)
 }
 
@@ -453,7 +453,7 @@ pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Complex {
 pub struct Mersenne31Engine {}
 
 impl Engine for Mersenne31Engine {
-    type BaseField = Mersenne31Field;
+    type BaseField = M31;
     type LdeOutputField = Mersenne31Complex;
     type ChallengeField = Mersenne31Quartic;
 
@@ -471,61 +471,61 @@ impl Engine for Mersenne31Engine {
 
     const FROBENIUS_MULTIPLIER_ONE: Self::LdeOutputField = Mersenne31Complex {
         coeffs: [
-            Mersenne31Field::new(21189756),
-            Mersenne31Field::new(42379512),
+            M31::new(21189756),
+            M31::new(42379512),
         ],
     };
     const FROBENIUS_MULTIPLIER_TWO: Self::LdeOutputField = Mersenne31Complex {
-        coeffs: [Mersenne31Field::new(2147483646), Mersenne31Field::ZERO],
+        coeffs: [M31::new(2147483646), M31::ZERO],
     };
     const FROBENIUS_MULTIPLIER_THREE: Self::LdeOutputField = Mersenne31Complex {
         coeffs: [
-            Mersenne31Field::new(2126293891),
-            Mersenne31Field::new(2105104135),
+            M31::new(2126293891),
+            M31::new(2105104135),
         ],
     };
 }
 */
 */
 
-impl Default for Mersenne31Field {
+impl Default for M31 {
     fn default() -> Self {
         Self(0u64)
     }
 }
 
-impl PartialEq for Mersenne31Field {
+impl PartialEq for M31 {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
-impl Eq for Mersenne31Field {}
+impl Eq for M31 {}
 
-impl Hash for Mersenne31Field {
+impl Hash for M31 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u32(self.to_reduced_u32())
     }
 }
 
-impl Ord for Mersenne31Field {
+impl Ord for M31 {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl PartialOrd for Mersenne31Field {
+impl PartialOrd for M31 {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Display for Mersenne31Field {
+impl Display for M31 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
 
-impl Debug for Mersenne31Field {
+impl Debug for M31 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.0, f)
     }

@@ -100,7 +100,7 @@ fn lagrange_interpolation<F: Field>(evals: Vec<F>) -> Vec<F> {
         let denom_inv = denom
             .inverse()
             .expect("lagrange coefficient denominator can not be zero");
-        let mut coeffs = {
+        let coeffs = {
             let mut coeffs = vec![F::ZERO; evals.len()];
             coeffs[0] = denom_inv;
 
