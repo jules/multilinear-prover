@@ -73,7 +73,7 @@ fn sum_polynomial<F: Field>(
 
 pub fn verify<F: Field, T: Transcript<F>>(
     proof: SumcheckProof<F>,
-    transcript: T,
+    transcript: &mut T,
 ) -> Result<bool, SumcheckError> {
     let SumcheckProof {
         proofs,
@@ -86,12 +86,12 @@ pub fn verify<F: Field, T: Transcript<F>>(
         let c = transcript.draw_challenge();
         challenges.push(c);
 
-        let res = univariate_eval(p, 0) + univariate_eval(p, 1);
+        let res = univariate_eval(&p, F::ZERO) + univariate_eval(&p, F::ONE);
         if res != claimed_sum {
             return Ok(false);
         }
 
-        claimed_sum = univariate_eval(p, c);
+        claimed_sum = univariate_eval(&p, c);
     }
 
     // check final eval on committed poly
@@ -128,4 +128,15 @@ fn lagrange_interpolation<F: Field>(evals: Vec<F>) -> Vec<F> {
             *eval * num * denom_inv
         })
         .collect::<Vec<F>>()
+}
+
+// Simple Horner's method evaluation.
+fn univariate_eval<F: Field>(coeffs: &[F], point: F) -> F {
+    coeffs
+        .iter()
+        .enumerate()
+        .rev()
+        .fold(F::ZERO, |acc, (i, coeff)| {
+            (acc + coeff) * point.pow(i as u32)
+        })
 }
