@@ -21,14 +21,15 @@ pub fn prove<F: Field, T: Transcript<F>>(
     let mut poly = poly.clone();
     let mut claimed_sum = None;
     for round in 0..n_rounds {
-        let evals = do_sumcheck_round(&mut challenge, &mut poly, &mut claimed_sum, round + 1)?;
+        let evals = sum_polynomial(&mut challenge, &mut poly, round + 1)?;
         if round == 0 {
             // Reuse the work to set our claimed sum.
-            claimed_sum = Some(evals.iter().sum());
+            claimed_sum = Some(evals.clone().into_iter().fold(F::ZERO, |acc, x| acc + x));
         }
+        let coeffs = lagrange_interpolation(evals);
 
-        transcript.observe_witnesses(&evals);
-        proofs.push(evals);
+        transcript.observe_witnesses(&coeffs);
+        proofs.push(coeffs);
         challenge = Some(transcript.draw_challenge());
     }
 
@@ -38,7 +39,7 @@ pub fn prove<F: Field, T: Transcript<F>>(
     })
 }
 
-fn do_sumcheck_round<F: Field>(
+fn sum_polynomial<F: Field>(
     challenge: &mut Option<F>,
     poly: &mut MultilinearExtension<F>,
     round: usize,
@@ -81,7 +82,7 @@ pub fn verify<F: Field, T: Transcript<F>>(
 
     let mut challenges = Vec::with_capacity(proofs.len());
     for p in proofs {
-        transcript.observe_witnesses(p);
+        transcript.observe_witnesses(&p);
         let c = transcript.draw_challenge();
         challenges.push(c);
 
@@ -90,10 +91,41 @@ pub fn verify<F: Field, T: Transcript<F>>(
             return Ok(false);
         }
 
-        *claimed_sum = univariate_eval(p, c);
+        claimed_sum = univariate_eval(p, c);
     }
 
     // check final eval on committed poly
 
     Ok(true)
+}
+
+// Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
+// NOTE: can be sped up if we precompute lagrange coeffs for a given size
+fn lagrange_interpolation<F: Field>(evals: Vec<F>) -> Vec<F> {
+    evals
+        .iter()
+        .enumerate()
+        .map(|(i, eval)| {
+            let denom = {
+                (0..evals.len())
+                    .map(|j| {
+                        let i = F::from_usize(i);
+                        let j = F::from_usize(j);
+                        if i == j {
+                            F::ONE
+                        } else {
+                            i - j
+                        }
+                    })
+                    .fold(F::ONE, |acc, x| acc * x)
+            };
+
+            let num = F::ONE; // TODO
+            let denom_inv = denom
+                .inverse()
+                .expect("lagrange coefficient denominator can not be zero");
+
+            *eval * num * denom_inv
+        })
+        .collect::<Vec<F>>()
 }

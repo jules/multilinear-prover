@@ -43,6 +43,8 @@ pub trait Field:
     const ONE: Self;
     type CharField = Self;
 
+    fn from_usize(v: usize) -> Self;
+
     // zero check
     fn is_zero(&self) -> bool;
     fn inverse(&self) -> Option<Self>;

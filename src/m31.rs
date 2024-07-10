@@ -75,6 +75,12 @@ impl Field for Mersenne31Field {
     const ZERO: Self = Self(0);
     const ONE: Self = Self(1);
 
+    fn from_usize(value: usize) -> Self {
+        let value = value as u64;
+        debug_assert!(value < Self::ORDER);
+        Self(value)
+    }
+
     #[inline(always)]
     fn is_zero(&self) -> bool {
         self.0 == 0
