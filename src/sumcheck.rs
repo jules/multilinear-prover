@@ -83,32 +83,51 @@ pub fn verify<F: Field, T: Transcript<F>>(
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
 // NOTE: can be sped up if we precompute lagrange coeffs for a given size
 fn lagrange_interpolation<F: Field>(evals: Vec<F>) -> Vec<F> {
-    evals
-        .iter()
-        .enumerate()
-        .map(|(i, eval)| {
-            let denom = {
-                (0..evals.len())
-                    .map(|j| {
-                        let i = F::from_usize(i);
-                        let j = F::from_usize(j);
-                        if i == j {
-                            F::ONE
-                        } else {
-                            i - j
-                        }
-                    })
-                    .fold(F::ONE, |acc, x| acc * x)
-            };
+    let mut polynomial = vec![F::ZERO; evals.len()];
+    evals.iter().enumerate().for_each(|(i, eval)| {
+        let denom = {
+            (0..evals.len()).fold(F::ONE, |acc, j| {
+                let i = F::from_usize(i);
+                let j = F::from_usize(j);
+                if i != j {
+                    acc * (i - j)
+                } else {
+                    acc
+                }
+            })
+        };
 
-            let num = F::ONE; // TODO
-            let denom_inv = denom
-                .inverse()
-                .expect("lagrange coefficient denominator can not be zero");
+        let denom_inv = denom
+            .inverse()
+            .expect("lagrange coefficient denominator can not be zero");
+        let mut coeffs = {
+            let mut coeffs = vec![F::ZERO; evals.len()];
+            coeffs[0] = denom_inv;
 
-            *eval * num * denom_inv
-        })
-        .collect::<Vec<F>>()
+            for k in 0..evals.len() {
+                if k == i {
+                    continue;
+                }
+
+                let start = if k < i { k + 1 } else { k };
+                let mut new_coeffs = vec![F::ZERO; evals.len()];
+                for j in (0..start).rev() {
+                    new_coeffs[j + 1] += coeffs[j];
+                    new_coeffs[j] -= F::from_usize(i) * coeffs[j];
+                }
+                coeffs = new_coeffs;
+            }
+
+            coeffs
+        };
+
+        polynomial
+            .iter_mut()
+            .zip(coeffs.iter())
+            .for_each(|(v, c)| *v += *eval * c);
+    });
+
+    polynomial
 }
 
 // Simple Horner's method evaluation.
