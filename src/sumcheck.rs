@@ -21,7 +21,20 @@ pub fn prove<F: Field, T: Transcript<F>>(
     let mut poly = poly.clone();
     let mut claimed_sum = None;
     for round in 0..n_rounds {
-        let evals = sum_polynomial(&mut challenge, &mut poly, round + 1)?;
+        // If we have some challenge, we first need to fix the polynomial on that challenge.
+        if let Some(c) = challenge {
+            if round == 1 {
+                return Err(SumcheckError::ChallengeOnFirstRound);
+            }
+
+            poly.fix_variable(c);
+        } else {
+            if round > 1 {
+                return Err(SumcheckError::ExpectedChallenge);
+            }
+        }
+
+        let evals = poly.sum_evaluations();
         if round == 0 {
             // Reuse the work to set our claimed sum.
             claimed_sum = Some(evals.clone().into_iter().fold(F::ZERO, |acc, x| acc + x));
@@ -37,38 +50,6 @@ pub fn prove<F: Field, T: Transcript<F>>(
         proofs,
         claimed_sum: claimed_sum.unwrap(),
     })
-}
-
-fn sum_polynomial<F: Field>(
-    challenge: &mut Option<F>,
-    poly: &mut MultilinearExtension<F>,
-    round: usize,
-) -> Result<Vec<F>, SumcheckError> {
-    // If we have some challenge, we first need to fix the polynomial on that challenge.
-    if let Some(c) = challenge {
-        if round == 1 {
-            return Err(SumcheckError::ChallengeOnFirstRound);
-        }
-
-        *poly = poly.fix_variable(*c);
-    } else {
-        if round > 1 {
-            return Err(SumcheckError::ExpectedChallenge);
-        }
-    }
-
-    // Here is where we get into the meat of the sumcheck.
-    // We want to sum up all the evaluations of the polynomial `f` except for those at the variable
-    // at `round`. We assume lexicographic ordering, so poly[0] and poly[1] will be f(0, 0, ..., 0)
-    // and f(1, 0, ..., 0).
-    let mut evals_0 = F::ZERO;
-    let mut evals_1 = F::ZERO;
-    for i in 0..poly.num_vars() - 1 {
-        evals_0 += poly.eval(i << 1);
-        evals_1 += poly.eval((i << 1) + 1);
-    }
-
-    Ok(vec![evals_0, evals_1])
 }
 
 pub fn verify<F: Field, T: Transcript<F>>(
