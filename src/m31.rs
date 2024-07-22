@@ -488,7 +488,7 @@ impl Engine for Mersenne31Engine {
 */
 */
 
-impl PartialEq for Mersenne31Field {
+impl PartialEq for M31 {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
