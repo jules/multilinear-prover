@@ -36,15 +36,14 @@ impl<F: Field> MultilinearExtension<F> {
         }
 
         self.evals.truncate(self.num_vars - 1);
-        self.num_vars = self.num_vars - 1;
+        self.num_vars -= 1;
     }
 
     /// Sums all the evaluations of the polynomial at f(0, ...) and f(1, ...).
     pub fn sum_evaluations(&self) -> Vec<F> {
-        // Here is where we get into the meat of the sumcheck.
-        // We want to sum up all the evaluations of the polynomial `f` except for those at the variable
-        // at `round`. We assume lexicographic ordering, so poly[0] and poly[1] will be f(0, 0, ..., 0)
-        // and f(1, 0, ..., 0).
+        // We want to sum up all the evaluations of the polynomial `f` except for those at the
+        // variable at the start. We assume lexicographic ordering, so poly[0] and poly[1] will be
+        // f(0, 0, ..., 0) and f(1, 0, ..., 0).
         let mut evals_0 = F::ZERO;
         let mut evals_1 = F::ZERO;
         for i in 0..self.num_vars() - 1 {

@@ -7,7 +7,7 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[repr(transparent)]
 /// The prime field `F_p` where `p = 2^31 - 1`.
 // NOTE: using a 64 bit register shouldn't affect performance on 64-bit processors (which is
@@ -28,7 +28,7 @@ impl M31 {
     }
 
     #[inline(always)]
-    pub const fn to_reduced_u32(&self) -> u32 {
+    pub const fn as_reduced_u32(&self) -> u32 {
         let mut c = self.0;
         if c >= Self::ORDER {
             c -= Self::ORDER;
@@ -252,7 +252,7 @@ impl PrimeField for M31 {
     const MINUS_ONE: Self = Self(Self::ORDER - 1);
     const NUM_BYTES_IN_REPR: usize = 8;
     const CHAR_BITS: usize = 31;
-    const CHARACTERISTICS: u64 = Self::ORDER as u64;
+    const CHARACTERISTICS: u64 = Self::ORDER;
 
     #[inline(always)]
     fn as_u64(self) -> u64 {
@@ -279,7 +279,7 @@ impl PrimeField for M31 {
 
     #[inline(always)]
     fn as_u64_reduced(&self) -> u64 {
-        self.to_reduced_u32() as u64
+        self.as_reduced_u32() as u64
     }
 
     fn as_boolean(&self) -> bool {
@@ -488,13 +488,7 @@ impl Engine for Mersenne31Engine {
 */
 */
 
-impl Default for M31 {
-    fn default() -> Self {
-        Self(0u64)
-    }
-}
-
-impl PartialEq for M31 {
+impl PartialEq for Mersenne31Field {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
@@ -503,7 +497,7 @@ impl Eq for M31 {}
 
 impl Hash for M31 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.to_reduced_u32())
+        state.write_u32(self.as_reduced_u32())
     }
 }
 
