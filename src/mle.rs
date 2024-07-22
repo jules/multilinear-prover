@@ -21,6 +21,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Returns an evaluation on the hypercube.
+    #[inline(always)]
     pub fn eval(&self, index: usize) -> F {
         debug_assert!(index < self.evals.len());
         self.evals[index]

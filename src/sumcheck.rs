@@ -7,36 +7,50 @@ pub enum SumcheckError {
 
 pub struct SumcheckProof<F: Field> {
     proofs: Vec<Vec<F>>,
-    claimed_sums: Vec<F>,
+    claimed_sum: F,
 }
 
+/// Runs the sumcheck prover.
 pub fn prove<F: Field, T: Transcript<F>>(
     poly: &MultilinearExtension<F>,
     transcript: &mut T,
 ) -> Result<SumcheckProof<F>, SumcheckError> {
     let n_rounds = poly.num_vars();
     let mut proofs = Vec::with_capacity(n_rounds);
-    let mut claimed_sums = Vec::with_capacity(n_rounds);
-    let mut poly = poly.clone();
+    let mut challenges = Vec::with_capacity(n_rounds);
+    let mut poly_clone = poly.clone(); // We will need to modify the polynomial but we should also
+                                       // keep the original for the commitment at the end.
 
+    // In the first round we have no challenge to fix the polynomial with, and we also need to
+    // collect the claimed sum from this step. This allows the verifier to reductively check all
+    // other claimed sums from just a single field element.
+    let (coeffs, evals) = sumcheck_step(&poly_clone, transcript);
+    let claimed_sum = evals.iter().fold(F::ZERO | acc, x | acc + x);
+    proofs.push(coeffs);
+
+    // For the remaining rounds, we always start by fixing the polynomial on a challenge
+    // element, and then performing sumcheck steps accordingly.
     for i in 0..(n_rounds - 1) {
-        let (coeffs, sum) = sumcheck_step(&poly, transcript);
-        transcript.observe_witnesses(&coeffs);
+        transcript.observe_witnesses(&proofs[i]);
         let challenge = transcript.draw_challenge();
+        challenges.push(challenge);
 
-        proofs.push(coeffs);
-        claimed_sums.push(sum);
-        poly.fix_variable(challenge);
+        poly_clone.fix_variable(challenge);
+        proofs.push(sumcheck_step(&poly_clone, transcript).0);
     }
 
-    // at the end, we only need to figure out the last poly and sum
-    let (coeffs, sum) = sumcheck_step(&poly, transcript);
-    proofs.push(coeffs);
-    claimed_sums.push(sum);
+    // Here we need to commit to the full polynomial and pack it into the proof with an evaluation.
+    // This provides the verifier with oracle access to the concerning polynomial and lets her
+    // check the final summation in the verification procedure.
+    transcript.observe_witnesses(&proofs[n_rounds - 1]);
+    let challenge = transcript.draw_challenge();
+    challenges.push(challenge);
+
+    // TODO: commit and create eval proof here, put in SumcheckProof
 
     Ok(SumcheckProof {
         proofs,
-        claimed_sums,
+        claimed_sum,
     })
 }
 
@@ -44,41 +58,43 @@ pub fn prove<F: Field, T: Transcript<F>>(
 fn sumcheck_step<F: Field, T: Transcript<F>>(
     poly: &MultilinearExtension<F>,
     transcript: &mut T,
-) -> (Vec<F>, F) {
+) -> (Vec<F>, Vec<F>) {
     let evals = poly.sum_evaluations();
     let coeffs = lagrange_interpolation(&evals);
-    (coeffs, evals.iter().fold(F::ZERO, |acc, x| acc + x))
+    (coeffs, evals)
 }
 
+/// Runs the sumcheck verifier. On being given:
+/// - A list of coefficient sets, one per round (or polynomial variable)
+/// - An initial claimed sum
+/// - Oracle access to the polynomial
+/// - An evaluation proof of the polynomial oracle
+/// the verifier can then successfully run the sumcheck protocol and ensure that the proof is
+/// correct.
 pub fn verify<F: Field, T: Transcript<F>>(
     proof: SumcheckProof<F>,
     transcript: &mut T,
 ) -> Result<bool, SumcheckError> {
     let SumcheckProof {
         proofs,
-        claimed_sums,
+        mut claimed_sum,
     } = proof;
 
-    let mut claim = None;
     let mut challenges = Vec::with_capacity(proofs.len());
-    for (coeffs, sum) in proofs.iter().zip(claimed_sums) {
-        if let Some(c) = claim {
-            if c != sum {
-                return Ok(false);
-            }
-        }
-
+    for coeffs in proofs {
         transcript.observe_witnesses(&coeffs);
         let c = transcript.draw_challenge();
         challenges.push(c);
 
         let res = univariate_eval(&coeffs, F::ZERO) + univariate_eval(&coeffs, F::ONE);
-        if res != sum {
+        if res != claimed_sum {
             return Ok(false);
         }
 
-        claim = Some(univariate_eval(&coeffs, c));
+        claimed_sum = univariate_eval(&coeffs, c);
     }
+
+    // Check the committed polynomial at the list of challenges.
 
     Ok(true)
 }
