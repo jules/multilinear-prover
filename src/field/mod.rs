@@ -103,7 +103,12 @@ pub trait PrimeField: Field {
 }
 
 pub trait ChallengeField<F: Field>:
-    Field + Add<F, Output = Self> + Sub<F, Output = Self> + Mul<F, Output = Self> + Into<Vec<F>>
+    Field
+    + Add<F, Output = Self>
+    + Sub<F, Output = Self>
+    + Mul<F, Output = Self>
+    + Into<Vec<F>>
+    + From<F>
 {
     const DEGREE: usize;
 

@@ -31,33 +31,38 @@ pub fn prove<
     F: Field,
     E: ChallengeField<F>,
     T: Transcript<F>,
-    PCS: PolynomialCommitmentScheme<F>,
+    PCS: PolynomialCommitmentScheme<E>,
 >(
     poly: &MultilinearExtension<F>,
     transcript: &mut T,
-) -> SumcheckProof<F, PCS> {
+) -> SumcheckProof<E, PCS> {
     let n_rounds = poly.num_vars();
     let mut proofs = Vec::with_capacity(n_rounds);
     let mut challenges = Vec::with_capacity(n_rounds);
-    let mut poly_clone = poly.clone(); // We will need to modify the polynomial but we should also
-                                       // keep the original for the commitment at the end.
+    let mut poly_lifted = poly.lift::<E>();
 
     // In the first round we have no challenge to fix the polynomial with, and we also need to
     // collect the claimed sum from this step. This allows the verifier to reductively check all
     // other claimed sums from just a single field element.
-    let (coeffs, evals) = sumcheck_step(&poly_clone);
+    let (coeffs, evals) = sumcheck_step(&poly);
     let claimed_sum = evals.iter().fold(F::ZERO, |acc, x| acc + x);
+    let coeffs = coeffs.into_iter().map(|c| E::from(c)).collect::<Vec<E>>();
     proofs.push(coeffs);
 
     // For the remaining rounds, we always start by fixing the polynomial on a challenge
     // element, and then performing sumcheck steps accordingly.
     for i in 0..(n_rounds - 1) {
-        transcript.observe_witnesses(&proofs[i]);
-        let challenge = transcript.draw_challenge();
+        transcript.observe_witnesses(
+            &proofs[i]
+                .iter()
+                .flat_map(|c| Into::<Vec<F>>::into(*c))
+                .collect::<Vec<F>>(),
+        );
+        let challenge = transcript.draw_challenge_ext::<E>();
         challenges.push(challenge);
 
-        poly_clone.fix_variable(challenge);
-        proofs.push(sumcheck_step(&poly_clone).0);
+        poly_lifted.fix_variable(challenge);
+        proofs.push(sumcheck_step(&poly_lifted).0);
     }
 
     // Here we need to commit to the full polynomial and pack it into the proof with an evaluation.
@@ -65,21 +70,26 @@ pub fn prove<
     // check the final summation in the verification procedure.
 
     // Retrieve the final sum at which we open the committed poly.
-    transcript.observe_witnesses(&proofs[n_rounds - 1]);
-    let challenge = transcript.draw_challenge();
+    transcript.observe_witnesses(
+        &proofs[n_rounds - 1]
+            .iter()
+            .flat_map(|c| Into::<Vec<F>>::into(*c))
+            .collect::<Vec<F>>(),
+    );
+    let challenge = transcript.draw_challenge_ext::<E>();
     challenges.push(challenge);
-    poly_clone = poly_clone.fix_variable(challenge);
-    debug_assert!(poly_clone.num_vars() == 0);
-    debug_assert!(poly_clone.evals.len() == 1);
-    let res = poly_clone.evals[0];
+    poly_lifted.fix_variable(challenge);
+    debug_assert!(poly_lifted.num_vars() == 0);
+    debug_assert!(poly_lifted.evals.len() == 1);
+    let res = poly_lifted.evals[0];
 
     // Do PCS work here and wrap up proof.
-    let commitment = PCS::commit(poly);
+    let commitment = PCS::commit(&poly.lift::<E>());
     let proof = PCS::open(&commitment, challenges, res);
 
     SumcheckProof {
         proofs,
-        claimed_sum,
+        claimed_sum: claimed_sum.into(),
         commitment,
         proof,
         res,
@@ -105,7 +115,7 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>) -> (Vec<F>, Vec<F>) {
 /// correct.
 ///
 /// For the generics: F denotes the base field, and E denotes the extension field.
-pub fn verify<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentScheme<F>>(
+pub fn verify<F: Field, T: Transcript<F>, PCS: PolynomialCommitmentScheme<F>>(
     proof: SumcheckProof<F, PCS>,
     transcript: &mut T,
 ) -> bool {
