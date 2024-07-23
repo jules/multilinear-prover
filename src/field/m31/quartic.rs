@@ -1,9 +1,9 @@
-use crate::field::m31::{Mersenne31Complex, M31};
+use super::{complex::M31_2, M31};
 use core::ops::{Add, Mul, Sub};
 
-pub struct Mersenne31Quartic([Mersenne31Complex; 2]);
+pub struct M31_4(pub [M31_2; 2]);
 
-impl Add<M31> for Mersenne31Quartic {
+impl Add<M31> for M31_4 {
     type Output = Self;
 
     fn add(mut self, rhs: M31) -> Self::Output {
@@ -12,7 +12,7 @@ impl Add<M31> for Mersenne31Quartic {
     }
 }
 
-impl Sub<M31> for Mersenne31Quartic {
+impl Sub<M31> for M31_4 {
     type Output = Self;
 
     fn sub(mut self, rhs: M31) -> Self::Output {
@@ -21,7 +21,7 @@ impl Sub<M31> for Mersenne31Quartic {
     }
 }
 
-impl Mul<M31> for Mersenne31Quartic {
+impl Mul<M31> for M31_4 {
     type Output = Self;
 
     fn mul(mut self, rhs: M31) -> Self::Output {
@@ -33,11 +33,8 @@ impl Mul<M31> for Mersenne31Quartic {
     }
 }
 
-impl From<M31> for Mersenne31Quartic {
+impl From<M31> for M31_4 {
     fn from(v: M31) -> Self {
-        Self([
-            Mersenne31Complex([v, M31(0)]),
-            Mersenne31Complex([M31(0), M31(0)]),
-        ])
+        Self([M31_2([v, M31(0)]), M31_2([M31(0), M31(0)])])
     }
 }

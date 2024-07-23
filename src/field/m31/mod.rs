@@ -1,5 +1,6 @@
 // taken mostly from air compiler
 
+pub mod complex;
 pub mod quartic;
 
 use crate::field::*;
@@ -345,40 +346,6 @@ impl Debug for M31 {
     }
 }
 
-pub struct Mersenne31Complex([M31; 2]);
-
-impl Mersenne31Complex {
-    pub const fn new(real: M31, imag: M31) -> Self {
-        Self([real, imag])
-    }
-
-    pub fn real_part(&self) -> M31 {
-        self.0[0]
-    }
-
-    pub fn imag_part(&self) -> M31 {
-        self.0[1]
-    }
-
-    pub fn conjugate(&'_ mut self) -> &'_ mut Self {
-        self.0[1] = self.0[1].neg();
-        self
-    }
-
-    pub fn div_2exp_u64(&self, exp: u64) -> Self {
-        Self::new(
-            self.real_part().div_2exp_u64(exp),
-            self.imag_part().div_2exp_u64(exp),
-        )
-    }
-}
-
 pub fn rand_fp_from_rng<R: rand::Rng>(rng: &mut R) -> M31 {
     M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER))
-}
-
-pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Complex {
-    let a = M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER));
-    let b = M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER));
-    Mersenne31Complex::new(a, b)
 }

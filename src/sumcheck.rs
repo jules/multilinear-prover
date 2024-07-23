@@ -113,8 +113,6 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>) -> (Vec<F>, Vec<F>) {
 /// - An evaluation proof of the polynomial oracle
 /// the verifier can then successfully run the sumcheck protocol and ensure that the proof is
 /// correct.
-///
-/// For the generics: F denotes the base field, and E denotes the extension field.
 pub fn verify<F: Field, T: Transcript<F>, PCS: PolynomialCommitmentScheme<F>>(
     proof: SumcheckProof<F, PCS>,
     transcript: &mut T,
