@@ -1,5 +1,7 @@
 // taken mostly from air compiler
 
+pub mod quartic;
+
 use crate::field::*;
 use core::{
     fmt::{Debug, Display, Formatter},
@@ -368,112 +370,6 @@ impl Mersenne31Complex {
             self.real_part().div_2exp_u64(exp),
             self.imag_part().div_2exp_u64(exp),
         )
-    }
-}
-
-pub struct Mersenne31Quartic([Mersenne31Complex; 2]);
-
-impl Add<M31> for Mersenne31Quartic {
-    type Output = Self;
-
-    fn add(self, rhs: M31) -> Self::Output {
-        self.0[0].0[0] += rhs;
-        self
-    }
-}
-
-impl Sub<M31> for Mersenne31Quartic {
-    type Output = Self;
-
-    fn sub(self, rhs: M31) -> Self::Output {
-        self.0[0].0[0] -= rhs;
-        self
-    }
-}
-
-impl Mul<M31> for Mersenne31Quartic {
-    type Output = Self;
-
-    fn mul(self, rhs: M31) -> Self::Output {
-        self.0[0].0[0] *= rhs;
-        self.0[0].0[1] *= rhs;
-        self.0[1].0[0] *= rhs;
-        self.0[1].0[1] *= rhs;
-        self
-    }
-}
-
-impl Mersenne31Quartic {
-    fn mul_assign_by_base(&mut self, elem: &M31) -> &mut Self {
-        self.0.iter_mut().for_each(|coef| {
-            coef.0.iter_mut().for_each(|c| {
-                c.mul_assign_by_base(elem);
-            });
-        });
-        self
-    }
-
-    fn into_coeffs_in_base(self) -> [M31; 4] {
-        let Mersenne31Quartic { coeffs } = self;
-        let [c0, c1] = coeffs[0].into_coeffs_in_base();
-        let [c2, c3] = coeffs[1].into_coeffs_in_base();
-        [c0, c1, c2, c3]
-    }
-
-    fn from_coeffs_in_base(coefs: &[M31]) -> Self {
-        let c0 = Mersenne31Complex::from_coeffs_in_base(&coefs[0..2]);
-        let c1 = Mersenne31Complex::from_coeffs_in_base(&coefs[2..4]);
-        Self { coeffs: [c0, c1] }
-    }
-
-    #[inline(always)]
-    fn from_coeffs_in_base_ref(coeffs: &[&M31]) -> Self {
-        let c0 = Mersenne31Complex::from_coeffs_in_base_ref(&coeffs[0..2]);
-        let c1 = Mersenne31Complex::from_coeffs_in_base_ref(&coeffs[2..4]);
-        Self { coeffs: [c0, c1] }
-    }
-
-    fn coeffs_in_base(&self) -> &[M31] {
-        unsafe { std::mem::transmute::<&[Mersenne31Complex], &[M31]>(&self.coeffs) }
-    }
-
-    fn add_assign_base(&mut self, elem: &M31) -> &mut Self {
-        self.0[0][0].add_assign_base(elem);
-        self
-    }
-
-    fn sub_assign_base(&mut self, elem: &M31) -> &mut Self {
-        self.0[0][0].sub_assign_base(elem);
-        self
-    }
-
-    fn from_base(elem: M31) -> Self {
-        let c0 = Mersenne31Complex::from_base(elem);
-        Self {
-            coeffs: [c0, Mersenne31Complex::ZERO],
-        }
-    }
-
-    fn get_coef_mut(&mut self, idx: usize) -> &mut M31 {
-        let major_idx = if idx < 2 { 0 } else { 1 };
-        self.coeffs[major_idx].get_coef_mut(idx % 2)
-=======
-    fn mul(self, rhs: Mersenne31Quartic) -> Self::Output {
-        rhs.0[0].0[0] *= self;
-        rhs.0[0].0[1] *= self;
-        rhs.0[1].0[0] *= self;
-        rhs.0[1].0[1] *= self;
-        rhs
-    }
-}
-
-impl From<M31> for Mersenne31Quartic {
-    fn from(v: M31) -> Self {
-        Self([
-            Mersenne31Complex([v, M31(0)]),
-            Mersenne31Complex([M31(0), M31(0)]),
-        ])
->>>>>>> e7e241f3f8959a9f4a0c05d8c8235e8a0020ed27
     }
 }
 

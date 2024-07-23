@@ -1,10 +1,11 @@
 //! Sumcheck prover/verifier
 
 use crate::{
-    field::Field, mle::MultilinearExtension, pcs::PolynomialCommitmentScheme,
+    field::{ChallengeField, Field},
+    mle::MultilinearExtension,
+    pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
 };
-use core::ops::{Add, Mul};
 
 /// A proof produced by running the Sumcheck protocol. Contains the interpolated polynomials at
 /// each variable, the initial claimed sum, a commitment and an opening proof of the polynomial on
@@ -28,8 +29,8 @@ pub struct SumcheckProof<F: Field, PCS: PolynomialCommitmentScheme<F>> {
 /// For the generics: F denotes the base field, and E denotes the extension field.
 pub fn prove<
     F: Field,
-    E: Field + Add<F, Output = E> + Mul<F, Output = E> + From<F>,
-    T: Transcript<E>,
+    E: ChallengeField<F>,
+    T: Transcript<F>,
     PCS: PolynomialCommitmentScheme<F>,
 >(
     poly: &MultilinearExtension<F>,
@@ -74,7 +75,7 @@ pub fn prove<
 
     // Do PCS work here and wrap up proof.
     let commitment = PCS::commit(poly);
-    let proof = PCS::open(commitment, challenges, res);
+    let proof = PCS::open(&commitment, challenges, res);
 
     SumcheckProof {
         proofs,
@@ -135,7 +136,7 @@ pub fn verify<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentSch
     }
 
     // Finally, check the committed polynomial at the list of challenges.
-    PCS::verify(commitment, challenges, res, proof)
+    PCS::verify(&commitment, challenges, res, proof)
 }
 
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...

@@ -1,4 +1,4 @@
-// taken from air compiler
+pub mod m31;
 
 use core::{
     cmp::{Eq, PartialEq},
@@ -100,4 +100,12 @@ pub trait PrimeField: Field {
     fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR];
 
     fn increment_unchecked(&'_ mut self);
+}
+
+pub trait ChallengeField<F: Field>:
+    Field + Add<F, Output = Self> + Sub<F, Output = Self> + Mul<F, Output = Self> + Into<Vec<F>>
+{
+    const DEGREE: usize;
+
+    fn new(values: [F; Self::DEGREE]) -> Self;
 }
