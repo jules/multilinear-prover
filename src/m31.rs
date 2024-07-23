@@ -373,125 +373,33 @@ impl Mersenne31Complex {
 
 pub struct Mersenne31Quartic([Mersenne31Complex; 2]);
 
-impl Field for Mersenne31Quartic {
-    const ZERO: Self = Self(0);
-    const ONE: Self = Self(1);
-
-    fn from_usize(value: usize) -> Self {
-        let value = value as u64;
-        debug_assert!(value < Self::ORDER);
-        Self([Mersenne31Complex([value, 0]), Mersenne31Complex::default()])
-    }
-
-    #[inline(always)]
-    fn is_zero(&self) -> bool {
-        self.0 == 0
-    }
-
-    fn inverse(&self) -> Option<Self> {
-        //Since the nonzero elements of GF(pn) form a finite group with respect to multiplication,
-        // a^p^n−1 = 1 (for a ≠ 0), thus the inverse of a is a^p^n−2.
-        if self.is_zero() {
-            return None;
-        }
-
-        let mut p101 = *self;
-        p101.exp_power_of_2(2);
-        p101 *= self;
-
-        let mut p1111 = p101;
-        p1111.square();
-        p1111 *= p101;
-
-        let mut p11111111 = p1111;
-        p11111111.exp_power_of_2(4);
-        p11111111 *= p1111;
-
-        let mut p111111110000 = p11111111;
-        p111111110000.exp_power_of_2(4);
-
-        let mut p111111111111 = p111111110000;
-        p111111111111 *= p1111;
-
-        let mut p1111111111111111 = p111111110000;
-        p1111111111111111.exp_power_of_2(4);
-        p1111111111111111 *= p11111111;
-
-        let mut p1111111111111111111111111111 = p1111111111111111;
-        p1111111111111111111111111111.exp_power_of_2(12);
-        p1111111111111111111111111111 *= p111111111111;
-
-        let mut p1111111111111111111111111111101 = p1111111111111111111111111111;
-        p1111111111111111111111111111101.exp_power_of_2(3);
-        p1111111111111111111111111111101 *= p101;
-        Some(p1111111111111111111111111111101)
-    }
-
-    #[inline(always)]
-    fn square(&self) -> Self {
-        *self * self
-    }
-
-    fn double(&self) -> Self {
-        self.mul_2exp_u64(1)
-    }
-
-    fn div2(&self) -> Self {
-        self.div_2exp_u64(1)
-    }
-}
-
 impl Add<M31> for Mersenne31Quartic {
     type Output = Self;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        self.0[0][0] + rhs
+    fn add(self, rhs: M31) -> Self::Output {
+        self.0[0].0[0] += rhs;
+        self
     }
 }
 
 impl Sub<M31> for Mersenne31Quartic {
     type Output = Self;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.0[0][0] - rhs
+    fn sub(self, rhs: M31) -> Self::Output {
+        self.0[0].0[0] -= rhs;
+        self
     }
 }
 
 impl Mul<M31> for Mersenne31Quartic {
     type Output = Self;
 
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self([
-            Mersenne31Complex([self.0[0][0] * rhs, self.0[0][1] * rhs]),
-            Mersenne31Complex([self.0[1][0] * rhs, self.0[1][1] * rhs]),
-        ])
-    }
-}
-
-impl Add<Mersenne31Quartic> for M31 {
-    type Output = Mersenne31Quartic;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        self + rhs.0[0][0]
-    }
-}
-
-impl Sub<Mersenne31Quartic> for M31 {
-    type Output = Mersenne31Quartic;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        self - rhs.0[0][0]
-    }
-}
-
-impl Mul<Mersenne31Quartic> for M31 {
-    type Output = Mersenne31Quartic;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self([
-            Mersenne31Complex([self * rhs.0[0][0], self * rhs.0[0][1]]),
-            Mersenne31Complex([self * rhs.0[1][0], self * rhs.0[1][1]]),
-        ])
+    fn mul(self, rhs: M31) -> Self::Output {
+        self.0[0].0[0] *= rhs;
+        self.0[0].0[1] *= rhs;
+        self.0[1].0[0] *= rhs;
+        self.0[1].0[1] *= rhs;
+        self
     }
 }
 
@@ -549,6 +457,23 @@ impl Mersenne31Quartic {
     fn get_coef_mut(&mut self, idx: usize) -> &mut M31 {
         let major_idx = if idx < 2 { 0 } else { 1 };
         self.coeffs[major_idx].get_coef_mut(idx % 2)
+=======
+    fn mul(self, rhs: Mersenne31Quartic) -> Self::Output {
+        rhs.0[0].0[0] *= self;
+        rhs.0[0].0[1] *= self;
+        rhs.0[1].0[0] *= self;
+        rhs.0[1].0[1] *= self;
+        rhs
+    }
+}
+
+impl From<M31> for Mersenne31Quartic {
+    fn from(v: M31) -> Self {
+        Self([
+            Mersenne31Complex([v, M31(0)]),
+            Mersenne31Complex([M31(0), M31(0)]),
+        ])
+>>>>>>> e7e241f3f8959a9f4a0c05d8c8235e8a0020ed27
     }
 }
 
