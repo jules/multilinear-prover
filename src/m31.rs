@@ -304,7 +304,6 @@ impl PrimeField for M31 {
     }
 }
 
-/*
 impl BaseField for M31 {
     const QUADRATIC_NON_RESIDUE: M31 = M31::MINUS_ONE;
 
@@ -370,10 +369,7 @@ impl TwoAdicField for Mersenne31Complex {
 
     fn two_adic_generator() -> Self {
         // element of order p+1 - generator of cicrcle group
-        Self::from_coeffs_in_base(&[
-            M31::new(311014874),
-            M31::new(1584694829),
-        ])
+        Self::from_coeffs_in_base(&[M31::new(311014874), M31::new(1584694829)])
     }
 
     fn two_adic_group_order() -> usize {
@@ -381,7 +377,6 @@ impl TwoAdicField for Mersenne31Complex {
     }
 }
 
-// TODO: for now it is a dirty hack and should definitely be derived automatically
 impl FieldExtension<M31> for Mersenne31Quartic {
     const DEGREE: usize = 4;
 
@@ -449,7 +444,6 @@ pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> Mersenne31Complex {
     Mersenne31Complex::new(a, b)
 }
 
-/*
 pub struct Mersenne31Engine {}
 
 impl Engine for Mersenne31Engine {
@@ -470,23 +464,15 @@ impl Engine for Mersenne31Engine {
     // print(alpha^(p^2 + p + 1))
 
     const FROBENIUS_MULTIPLIER_ONE: Self::LdeOutputField = Mersenne31Complex {
-        coeffs: [
-            M31::new(21189756),
-            M31::new(42379512),
-        ],
+        coeffs: [M31::new(21189756), M31::new(42379512)],
     };
     const FROBENIUS_MULTIPLIER_TWO: Self::LdeOutputField = Mersenne31Complex {
         coeffs: [M31::new(2147483646), M31::ZERO],
     };
     const FROBENIUS_MULTIPLIER_THREE: Self::LdeOutputField = Mersenne31Complex {
-        coeffs: [
-            M31::new(2126293891),
-            M31::new(2105104135),
-        ],
+        coeffs: [M31::new(2126293891), M31::new(2105104135)],
     };
 }
-*/
-*/
 
 impl PartialEq for M31 {
     fn eq(&self, other: &Self) -> bool {
@@ -525,7 +511,6 @@ impl Debug for M31 {
     }
 }
 
-/*
 impl std::fmt::Debug for Mersenne31Complex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "F2[{}, {}]", self.coeffs[0], self.coeffs[1])
@@ -563,4 +548,3 @@ impl std::fmt::Display for Mersenne31Quartic {
         )
     }
 }
-*/

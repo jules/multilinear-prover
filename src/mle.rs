@@ -29,7 +29,7 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// Sets the first variable of the polynomial to `point`. Used for fixing sumcheck challenges
     /// into the polynomial.
-    pub fn fix_variable(&mut self, point: F) {
+    pub fn fix_variable<E: Field>(&mut self, point: E) {
         // TODO: par
         // TODO: binius highly optimizes this
         for i in 0..(1 << (self.num_vars - 1)) {
@@ -54,4 +54,10 @@ impl<F: Field> MultilinearExtension<F> {
 
         vec![evals_0, evals_1]
     }
+}
+
+pub struct MultilinearComposite<F: Field> {
+    polys: Vec<MultilinearExtension<F>>,
+    num_vars: usize,
+    evals: Vec<F>,
 }
