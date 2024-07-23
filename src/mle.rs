@@ -1,4 +1,5 @@
 use crate::field::Field;
+use core::ops::{Add, Mul};
 
 /// A multilinear polynomial represented in the Lagrange basis.
 #[derive(Clone, Debug)]
@@ -28,16 +29,19 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Sets the first variable of the polynomial to `point`. Used for fixing sumcheck challenges
-    /// into the polynomial.
-    pub fn fix_variable<E: Field>(&mut self, point: E) {
+    /// into the polynomial. Supports the use of an extension field challenge.
+    pub fn fix_variable<E: Field + Mul<F, Output = E> + Add<F, Output = E>>(
+        &mut self,
+        point: E,
+    ) -> MultilinearExtension<E> {
         // TODO: par
         // TODO: binius highly optimizes this
+        let new = MultilinearExtension::<E>::new(vec![E::default(); 1 << (self.num_vars - 1)]);
         for i in 0..(1 << (self.num_vars - 1)) {
-            self.evals[i] = self.evals[i] + (self.evals[(i << 1) + 1] - self.evals[i << 1]) * point;
+            new.evals[i] = point * (self.evals[(i << 1) + 1] - self.evals[i << 1]) + self.evals[i];
         }
 
-        self.evals.truncate(self.num_vars - 1);
-        self.num_vars -= 1;
+        new
     }
 
     /// Sums all the evaluations of the polynomial at f(0, ...) and f(1, ...).

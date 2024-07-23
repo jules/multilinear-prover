@@ -1,7 +1,10 @@
+//! Sumcheck prover/verifier
+
 use crate::{
     field::Field, mle::MultilinearExtension, pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
 };
+use core::ops::{Add, Mul};
 
 /// A proof produced by running the Sumcheck protocol. Contains the interpolated polynomials at
 /// each variable, the initial claimed sum, a commitment and an opening proof of the polynomial on
@@ -15,15 +18,20 @@ pub struct SumcheckProof<F: Field, PCS: PolynomialCommitmentScheme<F>> {
 }
 
 /// Runs the sumcheck prover. Given a polynomial and some abstracted transcript, we:
-/// - Iteratively perform sumcheck reduction steps, in which we chop the polynomial up into small
-/// bits and prove its evaluations over the hypercube step by step
+/// - Iteratively perform sumcheck reduction steps, in which we evaluate the polynomial in all of
+/// its variables
 /// - Commit to the polynomial in full and produce an opening proof at the set of generated
 /// challenges
 ///
 /// Two different fields may be specified in case we want to use challenges from a field extension.
 ///
 /// For the generics: F denotes the base field, and E denotes the extension field.
-pub fn prove<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentScheme<F>>(
+pub fn prove<
+    F: Field,
+    E: Field + Add<F, Output = E> + Mul<F, Output = E> + From<F>,
+    T: Transcript<E>,
+    PCS: PolynomialCommitmentScheme<F>,
+>(
     poly: &MultilinearExtension<F>,
     transcript: &mut T,
 ) -> SumcheckProof<F, PCS> {
@@ -36,9 +44,9 @@ pub fn prove<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentSche
     // In the first round we have no challenge to fix the polynomial with, and we also need to
     // collect the claimed sum from this step. This allows the verifier to reductively check all
     // other claimed sums from just a single field element.
-    let (coeffs, evals) = sumcheck_step(&poly_clone, transcript);
-    let claimed_sum = evals.iter().fold(F::ZERO, |acc, x| acc + x);
-    proofs.push(coeffs);
+    let (coeffs, evals) = sumcheck_step(&poly_clone);
+    let claimed_sum = evals.into_iter().fold(E::ZERO, |acc, x| acc + x);
+    proofs.push(coeffs.into_iter().map(|v| v.into()).collect::<Vec<E>>());
 
     // For the remaining rounds, we always start by fixing the polynomial on a challenge
     // element, and then performing sumcheck steps accordingly.
@@ -47,8 +55,8 @@ pub fn prove<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentSche
         let challenge = transcript.draw_challenge();
         challenges.push(challenge);
 
-        poly_clone.fix_variable(challenge);
-        proofs.push(sumcheck_step(&poly_clone, transcript).0);
+        poly_clone = poly_clone.fix_variable::<E>(challenge);
+        proofs.push(sumcheck_step(&poly_clone).0);
     }
 
     // Here we need to commit to the full polynomial and pack it into the proof with an evaluation.
@@ -59,14 +67,14 @@ pub fn prove<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentSche
     transcript.observe_witnesses(&proofs[n_rounds - 1]);
     let challenge = transcript.draw_challenge();
     challenges.push(challenge);
-    poly_clone.fix_variable(challenge);
+    poly_clone = poly_clone.fix_variable(challenge);
     debug_assert!(poly_clone.num_vars() == 0);
     debug_assert!(poly_clone.evals.len() == 1);
     let res = poly_clone.evals[0];
 
     // Do PCS work here and wrap up proof.
     let commitment = PCS::commit(poly);
-    let proof = PCS::open(commitment, challenges, poly.eval(challenges));
+    let proof = PCS::open(commitment, challenges, res);
 
     SumcheckProof {
         proofs,
@@ -77,11 +85,11 @@ pub fn prove<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentSche
     }
 }
 
+// In a sumcheck step, we sum the evaluations of a polynomial together and create `d` separate sums
+// (where `d` is the degree of the multivariate polynomial), which are then interpolated into
+// monomial coefficients.
 #[inline(always)]
-fn sumcheck_step<F: Field, T: Transcript<F>>(
-    poly: &MultilinearExtension<F>,
-    transcript: &mut T,
-) -> (Vec<F>, Vec<F>) {
+fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>) -> (Vec<F>, Vec<F>) {
     let evals = poly.sum_evaluations();
     let coeffs = lagrange_interpolation(&evals);
     (coeffs, evals)
@@ -113,14 +121,14 @@ pub fn verify<F: Field, E: Field, T: Transcript<E>, PCS: PolynomialCommitmentSch
     // - Draw a challenge based on the polynomial coefficients (just as we do in the prover)
     // - Check the polynomial at 0 and 1, to ensure equality with the claimed sum
     // - Reduce the claimed sum by evaluating the polynomial at the challenge point
-    for coeffs in proofs {
+    for coeffs in proofs.into_iter() {
         transcript.observe_witnesses(&coeffs);
         let c = transcript.draw_challenge();
         challenges.push(c);
 
         let res = univariate_eval(&coeffs, F::ZERO) + univariate_eval(&coeffs, F::ONE);
         if res != claimed_sum {
-            return Ok(false);
+            return false;
         }
 
         claimed_sum = univariate_eval(&coeffs, c);

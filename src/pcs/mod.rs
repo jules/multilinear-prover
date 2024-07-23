@@ -1,3 +1,5 @@
+pub mod tensor_pcs;
+
 use crate::{field::Field, mle::MultilinearExtension};
 
 pub trait PolynomialCommitmentScheme<F: Field> {
