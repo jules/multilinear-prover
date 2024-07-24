@@ -73,6 +73,11 @@ impl M31 {
         }
         M31(res)
     }
+
+    #[inline(always)]
+    pub fn mul_by_nonresidue(&mut self) {
+        *self = self.neg();
+    }
 }
 
 impl Field for M31 {

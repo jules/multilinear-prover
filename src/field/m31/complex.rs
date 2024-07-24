@@ -54,30 +54,38 @@ impl Field for M31_2 {
     }
 
     fn square(&self) -> Self {
-        let mut v0 = self.c0;
-        v0 -= self.c1;
-        let mut v3 = self.c0;
-        let mut t0 = self.c1;
-        M31::mul_by_nonresidue(&mut t0);
+        let mut new = *self;
+        let mut v0 = new.c0;
+        v0 -= new.c1;
+        let mut v3 = new.c0;
+        let mut t0 = new.c1;
+        t0.mul_by_nonresidue();
         v3 -= t0;
-        let mut v2 = self.c0;
-        v2 *= self.c1;
+        let mut v2 = new.c0;
+        v2 *= new.c1;
         v0 *= v3;
         v0 += v2;
-        self.c1 = v2;
-        self.c1.double();
-        self.c0 = v0;
-        M31::mul_by_nonresidue(&mut v2);
-        self.c0 += v2;
-        self
+        new.c1 = v2;
+        new.c1.double();
+        new.c0 = v0;
+        v2.mul_by_nonresidue();
+        new.c0 += v2;
+        new
     }
 
     fn double(&self) -> Self {
-        self.c0.double();
-        self.c1.double();
+        let mut new = *self;
+        new.c0.double();
+        new.c1.double();
+        new
     }
 
-    fn div2(&self) -> Self {}
+    fn div2(&self) -> Self {
+        let mut new = *self;
+        new.c0.div2();
+        new.c1.div2();
+        new
+    }
 }
 
 impl Neg for M31_2 {
@@ -215,5 +223,5 @@ impl Display for M31_2 {
 pub fn rand_fp2_from_rng<R: rand::Rng>(rng: &mut R) -> M31_2 {
     let a = M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER));
     let b = M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER));
-    M31_2::new(a, b)
+    M31_2 { c0: a, c1: b }
 }

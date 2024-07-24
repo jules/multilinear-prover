@@ -1,10 +1,12 @@
 use super::{complex::M31_2, M31};
-use crate::field::Field;
+use crate::field::{ChallengeField, Field};
 use core::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
+// TODO this can be derived or done in a macro as we just have two degree-2 extensions in sequence.
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct M31_4 {
@@ -41,30 +43,61 @@ impl Field for M31_4 {
     }
 
     fn square(&self) -> Self {
-        let mut v0 = self.c0;
-        v0 -= self.c1;
-        let mut v3 = self.c0;
-        let mut t0 = self.c1;
-        M31::mul_by_nonresidue(&mut t0);
+        let mut new = *self;
+        let mut v0 = new.c0;
+        v0 -= new.c1;
+        let mut v3 = new.c0;
+        let mut t0 = new.c1;
+        t0.mul_by_nonresidue();
         v3 -= t0;
-        let mut v2 = self.c0;
-        v2 *= self.c1;
+        let mut v2 = new.c0;
+        v2 *= new.c1;
         v0 *= v3;
         v0 += v2;
-        self.c1 = v2;
-        self.c1.double();
-        self.c0 = v0;
-        M31::mul_by_nonresidue(&mut v2);
-        self.c0 += v2;
-        self
+        new.c1 = v2;
+        new.c1.double();
+        new.c0 = v0;
+        v2.mul_by_nonresidue();
+        new.c0 += v2;
+        new
     }
 
     fn double(&self) -> Self {
-        self.c0.double();
-        self.c1.double();
+        let mut new = *self;
+        new.c0.double();
+        new.c1.double();
+        new
     }
 
-    fn div2(&self) -> Self {}
+    fn div2(&self) -> Self {
+        let mut new = *self;
+        new.c0.div2();
+        new.c1.div2();
+        new
+    }
+}
+
+impl ChallengeField<M31> for M31_4 {
+    const DEGREE: usize = 4;
+
+    fn new(values: [M31; Self::DEGREE]) -> Self {
+        Self {
+            c0: M31_2 {
+                c0: values[0],
+                c1: values[1],
+            },
+            c1: M31_2 {
+                c0: values[2],
+                c1: values[3],
+            },
+        }
+    }
+}
+
+impl Into<Vec<M31>> for M31_4 {
+    fn into(self) -> Vec<M31> {
+        vec![self.c0.c0, self.c0.c1, self.c1.c0, self.c1.c1]
+    }
 }
 
 impl Neg for M31_4 {

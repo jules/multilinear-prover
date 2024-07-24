@@ -262,7 +262,7 @@ mod tests {
             .iter_mut()
             .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
         let poly = MultilinearExtension::new(evals);
-        let transcript = MockTranscript {
+        let mut transcript = MockTranscript {
             counter: 1,
             _marker: PhantomData::<M31>,
         };
