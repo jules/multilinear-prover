@@ -135,6 +135,7 @@ pub fn verify<F: Field, T: Transcript<F>, PCS: PolynomialCommitmentScheme<F>>(
         let c = transcript.draw_challenge();
         challenges.push(c);
 
+        // NOTE: the first step of this verification should take place in the base field
         let res = univariate_eval(&coeffs, F::ZERO) + univariate_eval(&coeffs, F::ONE);
         if res != claimed_sum {
             return false;
@@ -209,4 +210,62 @@ fn univariate_eval<F: Field>(coeffs: &[F], point: F) -> F {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use crate::field::m31::{quartic::M31_4, M31};
+    use rand::Rng;
+    use std::marker::PhantomData;
+
+    pub struct MockPCS<F: Field> {
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: Field> PolynomialCommitmentScheme<F> for MockPCS<F> {
+        type Commitment = usize;
+        type Proof = usize;
+
+        fn commit(poly: &MultilinearExtension<F>) -> Self::Commitment {
+            0
+        }
+
+        fn open(comm: &Self::Commitment, eval: Vec<F>, result: F) -> Self::Proof {
+            0
+        }
+
+        fn verify(comm: &Self::Commitment, eval: Vec<F>, result: F, proof: Self::Proof) -> bool {
+            true
+        }
+    }
+
+    pub struct MockTranscript<F: Field> {
+        counter: usize,
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: Field> Transcript<F> for MockTranscript<F> {
+        fn draw_challenge(&mut self) -> F {
+            self.counter += 1;
+            F::from_usize(self.counter)
+        }
+        fn draw_challenge_ext<E: ChallengeField<F>>(&mut self) -> E {
+            self.counter += 1;
+            E::from(F::from_usize(self.counter))
+        }
+        fn observe_witness(&mut self, witness: F) {}
+        fn observe_witnesses(&mut self, witness: &[F]) {}
+    }
+
+    #[test]
+    fn mock_pcs_test() {
+        let mut evals = vec![M31::default(); 2u32.pow(16) as usize];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = MultilinearExtension::new(evals);
+        let transcript = MockTranscript {
+            counter: 1,
+            _marker: PhantomData::<M31>,
+        };
+        let proof = prove::<_, M31_4, _, MockPCS<M31_4>>(&poly, &mut transcript);
+    }
+}

@@ -17,7 +17,7 @@ use core::{
 //
 // XXX: since we use such a large register, lazy reduction could be really viable but only for
 // additions/subtractions (does reduction still get to use the same hack in this case?)
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(transparent)]
 pub struct M31(pub u64);
 
@@ -309,40 +309,15 @@ impl PrimeField for M31 {
     }
 }
 
-impl PartialEq for M31 {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-impl Eq for M31 {}
-
 impl Hash for M31 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u32(self.as_reduced_u32())
     }
 }
 
-impl Ord for M31 {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp(&other.0)
-    }
-}
-
-impl PartialOrd for M31 {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 impl Display for M31 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
-    }
-}
-
-impl Debug for M31 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.0, f)
     }
 }
 
