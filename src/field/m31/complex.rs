@@ -3,7 +3,6 @@ use crate::field::{Field, PrimeField};
 use core::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -17,11 +16,11 @@ impl M31_2 {
         let (a, b) = (self.c0, self.c1);
         let mut real = a;
         real.double();
-        real -= b;
+        real.sub_assign(&b);
 
         let mut imag = b;
         imag.double();
-        imag += a;
+        imag.add_assign(&a);
 
         self.c0 = real;
         self.c1 = imag;
@@ -50,155 +49,90 @@ impl Field for M31_2 {
     }
 
     fn inverse(&self) -> Option<Self> {
-        None
-    }
-
-    fn square(&self) -> Self {
-        let mut new = *self;
-        let mut v0 = new.c0;
-        v0 -= new.c1;
-        let mut v3 = new.c0;
-        let mut t0 = new.c1;
-        t0.mul_by_nonresidue();
-        v3 -= t0;
-        let mut v2 = new.c0;
-        v2 *= new.c1;
-        v0 *= v3;
-        v0 += v2;
-        new.c1 = v2;
-        new.c1.double();
-        new.c0 = v0;
-        v2.mul_by_nonresidue();
-        new.c0 += v2;
-        new
-    }
-
-    fn double(&self) -> Self {
-        let mut new = *self;
-        new.c0.double();
-        new.c1.double();
-        new
-    }
-
-    fn div2(&self) -> Self {
-        let mut new = *self;
-        new.c0.div2();
-        new.c1.div2();
-        new
-    }
-}
-
-impl Neg for M31_2 {
-    type Output = Self;
-
-    fn neg(mut self) -> Self::Output {
-        self.c0 = self.c0.neg();
-        self.c1 = self.c1.neg();
-        self
-    }
-}
-
-impl Add<Self> for M31_2 {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self.c0 += rhs.c0;
-        self.c1 += rhs.c1;
-        self
-    }
-}
-
-impl Add<&Self> for M31_2 {
-    type Output = Self;
-
-    fn add(self, rhs: &Self) -> Self::Output {
-        self + *rhs
-    }
-}
-
-impl Sub<Self> for M31_2 {
-    type Output = Self;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self.c0 -= rhs.c0;
-        self.c1 -= rhs.c1;
-        self
-    }
-}
-
-impl Sub<&Self> for M31_2 {
-    type Output = Self;
-
-    fn sub(self, rhs: &Self) -> Self::Output {
-        self - *rhs
-    }
-}
-
-impl Mul<Self> for M31_2 {
-    type Output = Self;
-
-    fn mul(mut self, rhs: Self) -> Self::Output {
         let mut v0 = self.c0;
-        v0 *= rhs.c0;
+        v0.square();
         let mut v1 = self.c1;
-        v1 *= rhs.c1;
+        v1.square();
+        // v0 = v0 - beta * v1
+        let mut v1_by_nonresidue = v1;
+        v1_by_nonresidue.mul_by_nonresidue();
+        v0.sub_assign(&v1_by_nonresidue);
+        match v0.inverse() {
+            Some(inversed) => {
+                let mut c0 = self.c0;
+                c0.mul_assign(&inversed);
+                let mut c1 = self.c1;
+                c1.mul_assign(&inversed);
+                c1.negate();
+
+                let new = Self { c0, c1 };
+                Some(new)
+            }
+            None => None,
+        }
+    }
+
+    fn add_assign(&mut self, other: &Self) {
+        self.c0.add_assign(&other.c0);
+        self.c1.add_assign(&other.c1);
+    }
+
+    fn sub_assign(&mut self, other: &Self) {
+        self.c0.sub_assign(&other.c0);
+        self.c1.sub_assign(&other.c1);
+    }
+
+    fn mul_assign(&mut self, other: &Self) {
+        let mut v0 = self.c0;
+        v0.mul_assign(&other.c0);
+        let mut v1 = self.c1;
+        v1.mul_assign(&other.c1);
 
         let t = self.c0;
-        self.c1 += t;
+        self.c1.add_assign(&t);
 
-        let mut t0 = rhs.c0;
-        t0 += rhs.c1;
-        self.c1 *= t0;
-        self.c1 += v0;
-        self.c1 += v1;
+        let mut t0 = other.c0;
+        t0.add_assign(&other.c1);
+        self.c1.mul_assign(&t0);
+        self.c1.sub_assign(&v0);
+        self.c1.sub_assign(&v1);
         self.c0 = v0;
-        v1 = v1.neg();
-        self.c0 += v1;
-        self
+        v1.mul_by_nonresidue();
+        self.c0.add_assign(&v1);
     }
-}
 
-impl Mul<&Self> for M31_2 {
-    type Output = Self;
-
-    fn mul(self, rhs: &Self) -> Self::Output {
-        self * *rhs
+    fn negate(&mut self) {
+        self.c0.negate();
+        self.c1.negate();
     }
-}
 
-impl AddAssign<Self> for M31_2 {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
+    fn square(&mut self) {
+        let mut v0 = self.c0;
+        v0.sub_assign(&self.c1);
+        let mut v3 = self.c0;
+        let mut t0 = self.c1;
+        t0.mul_by_nonresidue();
+        v3.sub_assign(&t0);
+        let mut v2 = self.c0;
+        v2.mul_assign(&self.c1);
+        v0.mul_assign(&v3);
+        v0.add_assign(&v2);
+
+        self.c1 = v2;
+        self.c1.double();
+        self.c0 = v0;
+        v2.mul_by_nonresidue();
+        self.c0.add_assign(&v2);
     }
-}
 
-impl AddAssign<&Self> for M31_2 {
-    fn add_assign(&mut self, rhs: &Self) {
-        *self = *self + *rhs
+    fn double(&mut self) {
+        self.c0.double();
+        self.c1.double();
     }
-}
 
-impl SubAssign<Self> for M31_2 {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = *self - rhs
-    }
-}
-
-impl SubAssign<&Self> for M31_2 {
-    fn sub_assign(&mut self, rhs: &Self) {
-        *self = *self - *rhs
-    }
-}
-
-impl MulAssign<Self> for M31_2 {
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = *self * rhs
-    }
-}
-
-impl MulAssign<&Self> for M31_2 {
-    fn mul_assign(&mut self, rhs: &Self) {
-        *self = *self * *rhs
+    fn div2(&mut self) {
+        self.c0.div2();
+        self.c1.div2();
     }
 }
 

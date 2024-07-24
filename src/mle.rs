@@ -40,7 +40,11 @@ impl<F: Field> MultilinearExtension<F> {
         // TODO: par
         // TODO: binius highly optimizes this
         for i in 0..(1 << (self.num_vars - 1)) {
-            self.evals[i] = point * (self.evals[(i << 1) + 1] - self.evals[i << 1]) + self.evals[i];
+            let mut s = self.evals[(i << 1) + 1];
+            s.sub_assign(&self.evals[i << 1]);
+            let mut res = point;
+            res.mul_assign(&s);
+            self.evals[i].add_assign(&res);
         }
 
         self.num_vars -= 1;
@@ -55,8 +59,8 @@ impl<F: Field> MultilinearExtension<F> {
         let mut evals_0 = F::ZERO;
         let mut evals_1 = F::ZERO;
         for i in 0..self.num_vars() - 1 {
-            evals_0 += self.eval(i << 1);
-            evals_1 += self.eval((i << 1) + 1);
+            evals_0.add_assign(&self.eval(i << 1));
+            evals_1.add_assign(&self.eval((i << 1) + 1));
         }
 
         vec![evals_0, evals_1]

@@ -45,7 +45,10 @@ pub fn prove<
     // collect the claimed sum from this step. This allows the verifier to reductively check all
     // other claimed sums from just a single field element.
     let (coeffs, evals) = sumcheck_step(&poly);
-    let claimed_sum = evals.iter().fold(F::ZERO, |acc, x| acc + x);
+    let claimed_sum = evals.iter().fold(F::ZERO, |mut acc, x| {
+        acc.add_assign(x);
+        acc
+    });
     let coeffs = coeffs.into_iter().map(|c| E::from(c)).collect::<Vec<E>>();
     proofs.push(coeffs);
 
@@ -136,7 +139,8 @@ pub fn verify<F: Field, T: Transcript<F>, PCS: PolynomialCommitmentScheme<F>>(
         challenges.push(c);
 
         // NOTE: the first step of this verification should take place in the base field
-        let res = univariate_eval(&coeffs, F::ZERO) + univariate_eval(&coeffs, F::ONE);
+        let mut res = univariate_eval(&coeffs, F::ZERO);
+        res.add_assign(&univariate_eval(&coeffs, F::ONE));
         if res != claimed_sum {
             return false;
         }
@@ -154,11 +158,13 @@ fn lagrange_interpolation<F: Field>(evals: &[F]) -> Vec<F> {
     let mut polynomial = vec![F::ZERO; evals.len()];
     evals.iter().enumerate().for_each(|(i, eval)| {
         let denom = {
-            (0..evals.len()).fold(F::ONE, |acc, j| {
-                let i = F::from_usize(i);
+            (0..evals.len()).fold(F::ONE, |mut acc, j| {
+                let mut i = F::from_usize(i);
                 let j = F::from_usize(j);
                 if i != j {
-                    acc * (i - j)
+                    i.sub_assign(&j);
+                    acc.mul_assign(&i);
+                    acc
                 } else {
                     acc
                 }
@@ -180,8 +186,10 @@ fn lagrange_interpolation<F: Field>(evals: &[F]) -> Vec<F> {
                 let start = if k < i { k + 1 } else { k };
                 let mut new_coeffs = vec![F::ZERO; evals.len()];
                 for j in (0..start).rev() {
-                    new_coeffs[j + 1] += coeffs[j];
-                    new_coeffs[j] -= F::from_usize(i) * coeffs[j];
+                    new_coeffs[j + 1].add_assign(&coeffs[j]);
+                    let mut i = F::from_usize(i);
+                    i.mul_assign(&coeffs[j]);
+                    new_coeffs[j].sub_assign(&i);
                 }
                 coeffs = new_coeffs;
             }
@@ -189,10 +197,11 @@ fn lagrange_interpolation<F: Field>(evals: &[F]) -> Vec<F> {
             coeffs
         };
 
-        polynomial
-            .iter_mut()
-            .zip(coeffs.iter())
-            .for_each(|(v, c)| *v += *eval * c);
+        polynomial.iter_mut().zip(coeffs.iter()).for_each(|(v, c)| {
+            let mut eval = *eval;
+            eval.mul_assign(c);
+            v.add_assign(&eval);
+        });
     });
 
     polynomial
@@ -204,8 +213,10 @@ fn univariate_eval<F: Field>(coeffs: &[F], point: F) -> F {
         .iter()
         .enumerate()
         .rev()
-        .fold(F::ZERO, |acc, (i, coeff)| {
-            (acc + coeff) * point.pow(i as u32)
+        .fold(F::ZERO, |mut acc, (i, coeff)| {
+            acc.add_assign(coeff);
+            acc.mul_assign(&point.pow(i as u32));
+            acc
         })
 }
 

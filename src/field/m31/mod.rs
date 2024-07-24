@@ -7,7 +7,6 @@ use crate::field::*;
 use core::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 /// The prime field `F_p` where `p = 2^31 - 1`.
@@ -76,7 +75,7 @@ impl M31 {
 
     #[inline(always)]
     pub fn mul_by_nonresidue(&mut self) {
-        *self = self.neg();
+        self.negate();
     }
 }
 
@@ -104,156 +103,78 @@ impl Field for M31 {
 
         let mut p101 = *self;
         p101.exp_power_of_2(2);
-        p101 *= self;
+        p101.mul_assign(&self);
 
         let mut p1111 = p101;
         p1111.square();
-        p1111 *= p101;
+        p1111.mul_assign(&p101);
 
         let mut p11111111 = p1111;
         p11111111.exp_power_of_2(4);
-        p11111111 *= p1111;
+        p11111111.mul_assign(&p1111);
 
         let mut p111111110000 = p11111111;
         p111111110000.exp_power_of_2(4);
 
         let mut p111111111111 = p111111110000;
-        p111111111111 *= p1111;
+        p111111111111.mul_assign(&p1111);
 
         let mut p1111111111111111 = p111111110000;
         p1111111111111111.exp_power_of_2(4);
-        p1111111111111111 *= p11111111;
+        p1111111111111111.mul_assign(&p11111111);
 
         let mut p1111111111111111111111111111 = p1111111111111111;
         p1111111111111111111111111111.exp_power_of_2(12);
-        p1111111111111111111111111111 *= p111111111111;
+        p1111111111111111111111111111.mul_assign(&p111111111111);
 
         let mut p1111111111111111111111111111101 = p1111111111111111111111111111;
         p1111111111111111111111111111101.exp_power_of_2(3);
-        p1111111111111111111111111111101 *= p101;
+        p1111111111111111111111111111101.mul_assign(&p101);
         Some(p1111111111111111111111111111101)
     }
 
-    #[inline(always)]
-    fn square(&self) -> Self {
-        *self * self
-    }
-
-    fn double(&self) -> Self {
-        self.mul_2exp_u64(1)
-    }
-
-    fn div2(&self) -> Self {
-        self.div_2exp_u64(1)
-    }
-}
-
-impl Neg for M31 {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        if !self.is_zero() {
-            Self(Self::ORDER - self.0)
-        } else {
-            self
-        }
-    }
-}
-
-impl Add<Self> for M31 {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        let sum = self.0.wrapping_add(rhs.0);
+    fn add_assign(&mut self, other: &Self) {
+        let sum = self.0.wrapping_add(other.0);
         // cond select of result based on overflow
         // avoids branching but idk if this is really that efficient
-        let of = self.0 >= Self::ORDER;
-        let reduced = self.0.wrapping_sub(Self::ORDER);
+        let of = sum >= Self::ORDER;
+        let reduced = sum.wrapping_sub(Self::ORDER);
         let mask = 0u64.wrapping_sub(of as u64);
-        Self(sum ^ (mask & (sum ^ reduced)))
+        self.0 = sum ^ (mask & (sum ^ reduced));
     }
-}
 
-impl Add<&Self> for M31 {
-    type Output = Self;
-
-    fn add(self, rhs: &Self) -> Self::Output {
-        self + *rhs
-    }
-}
-
-impl Sub<Self> for M31 {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        let mut res = self.0.wrapping_sub(rhs.0);
+    fn sub_assign(&mut self, other: &Self) {
+        let mut res = self.0.wrapping_sub(other.0);
         let msb = res & Self::MSBITMASK;
         res ^= msb;
-        Self(res - (msb != 0) as u64)
+        self.0 = res - (msb != 0) as u64
     }
-}
 
-impl Sub<&Self> for M31 {
-    type Output = Self;
-
-    fn sub(self, rhs: &Self) -> Self::Output {
-        self - *rhs
-    }
-}
-
-impl Mul<Self> for M31 {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        let product = self.0 * rhs.0; // since we're using u64 no need to care about overflow or
-                                      // casting
+    fn mul_assign(&mut self, other: &Self) {
+        let product = self.0 * other.0; // since we're using u64 no need to care about overflow or
+                                        // casting
         let product_low = product & Self::ORDER;
         let product_high = product >> 31;
-        Self(product_low) + Self(product_high)
+        self.0 = product_low + product_high
     }
-}
 
-impl Mul<&Self> for M31 {
-    type Output = Self;
-
-    fn mul(self, rhs: &Self) -> Self::Output {
-        self * *rhs
+    fn negate(&mut self) {
+        if !self.is_zero() {
+            self.0 = Self::ORDER - self.0
+        }
     }
-}
 
-impl AddAssign<Self> for M31 {
-    fn add_assign(&mut self, other: Self) {
-        *self = *self + other;
+    #[inline(always)]
+    fn square(&mut self) {
+        self.mul_assign(&self.clone());
     }
-}
 
-impl AddAssign<&Self> for M31 {
-    fn add_assign(&mut self, other: &Self) {
-        *self = *self + *other;
+    fn double(&mut self) {
+        *self = self.mul_2exp_u64(1);
     }
-}
 
-impl SubAssign<Self> for M31 {
-    fn sub_assign(&mut self, other: Self) {
-        *self = *self - other;
-    }
-}
-
-impl SubAssign<&Self> for M31 {
-    fn sub_assign(&mut self, other: &Self) {
-        *self = *self - *other;
-    }
-}
-
-impl MulAssign<Self> for M31 {
-    fn mul_assign(&mut self, other: Self) {
-        *self = *self * other;
-    }
-}
-
-impl MulAssign<&Self> for M31 {
-    fn mul_assign(&mut self, other: &Self) {
-        *self = *self * *other;
+    fn div2(&mut self) {
+        *self = self.div_2exp_u64(1);
     }
 }
 

@@ -6,7 +6,6 @@ use core::{
     fmt::{Debug, Display},
     hash::Hash,
     marker::{Send, Sync},
-    ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 pub trait Field:
@@ -22,19 +21,6 @@ pub trait Field:
     + Send
     + Sync
     + Default
-    + Neg
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + for<'a> Add<&'a Self, Output = Self>
-    + for<'a> Sub<&'a Self, Output = Self>
-    + for<'a> Mul<&'a Self, Output = Self>
-    + AddAssign
-    + SubAssign
-    + MulAssign
-    + for<'a> AddAssign<&'a Self>
-    + for<'a> SubAssign<&'a Self>
-    + for<'a> MulAssign<&'a Self>
     + Sized
 {
     const ZERO: Self;
@@ -47,9 +33,13 @@ pub trait Field:
     fn is_zero(&self) -> bool;
     fn inverse(&self) -> Option<Self>;
 
-    fn square(&self) -> Self;
-    fn double(&self) -> Self;
-    fn div2(&self) -> Self;
+    fn add_assign(&mut self, other: &Self);
+    fn sub_assign(&mut self, other: &Self);
+    fn mul_assign(&mut self, other: &Self);
+    fn negate(&mut self);
+    fn square(&mut self);
+    fn double(&mut self);
+    fn div2(&mut self);
 
     fn pow(&self, mut exp: u32) -> Self {
         let mut base = *self;
@@ -60,7 +50,7 @@ pub trait Field:
             }
 
             exp >>= 1;
-            base = base.square();
+            base.square();
         }
 
         result
@@ -102,15 +92,11 @@ pub trait PrimeField: Field {
     fn increment_unchecked(&'_ mut self);
 }
 
-pub trait ChallengeField<F: Field>:
-    Field
-    + Add<F, Output = Self>
-    + Sub<F, Output = Self>
-    + Mul<F, Output = Self>
-    + Into<Vec<F>>
-    + From<F>
-{
+pub trait ChallengeField<F: Field>: Field + Into<Vec<F>> + From<F> {
     const DEGREE: usize;
 
     fn new(values: [F; Self::DEGREE]) -> Self;
+    fn add_base(&mut self, other: &F);
+    fn sub_base(&mut self, other: &F);
+    fn mul_base(&mut self, other: &F);
 }
