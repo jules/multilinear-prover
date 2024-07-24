@@ -7,18 +7,33 @@ use core::{
 };
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct M31_4(pub [M31_2; 2]);
+pub struct M31_4 {
+    pub c0: M31_2,
+    pub c1: M31_2,
+}
 
 impl Field for M31_4 {
-    const ZERO: Self = M31_4([M31_2::ZERO, M31_2::ZERO]);
-    const ONE: Self = M31_4([M31_2::ONE, M31_2::ZERO]);
+    const ZERO: Self = Self {
+        c0: M31_2::ZERO,
+        c1: M31_2::ZERO,
+    };
+    const ONE: Self = Self {
+        c0: M31_2::ONE,
+        c1: M31_2::ZERO,
+    };
 
     fn from_usize(v: usize) -> Self {
-        M31_4([M31_2([M31::new(v as u64), M31::ZERO]), M31_2::ZERO])
+        Self {
+            c0: M31_2 {
+                c0: M31::new(v as u64),
+                c1: M31::ZERO,
+            },
+            c1: M31_2::ZERO,
+        }
     }
 
     fn is_zero(&self) -> bool {
-        self.0[0].is_zero() && self.0[1].is_zero()
+        self.c0.is_zero() && self.c1.is_zero()
     }
 
     fn inverse(&self) -> Option<Self> {
@@ -26,27 +41,27 @@ impl Field for M31_4 {
     }
 
     fn square(&self) -> Self {
-        let mut v0 = self.0[0];
-        v0 -= self.0[1];
-        let mut v3 = self.0[0];
-        let mut t0 = self.0[1];
+        let mut v0 = self.c0;
+        v0 -= self.c1;
+        let mut v3 = self.c0;
+        let mut t0 = self.c1;
         M31::mul_by_nonresidue(&mut t0);
         v3 -= t0;
-        let mut v2 = self.0[0];
-        v2 *= self.0[1];
+        let mut v2 = self.c0;
+        v2 *= self.c1;
         v0 *= v3;
         v0 += v2;
-        self.0[1] = v2;
-        self.0[1].double();
-        self.0[0] = v0;
+        self.c1 = v2;
+        self.c1.double();
+        self.c0 = v0;
         M31::mul_by_nonresidue(&mut v2);
-        self.0[0] += v2;
+        self.c0 += v2;
         self
     }
 
     fn double(&self) -> Self {
-        self.0[0].double();
-        self.0[1].double();
+        self.c0.double();
+        self.c1.double();
     }
 
     fn div2(&self) -> Self {}
@@ -56,8 +71,8 @@ impl Neg for M31_4 {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
-        self.0[0] = self.0[0].neg();
-        self.0[1] = self.0[1].neg();
+        self.c0 = self.c0.neg();
+        self.c1 = self.c1.neg();
         self
     }
 }
@@ -66,8 +81,8 @@ impl Add<Self> for M31_4 {
     type Output = Self;
 
     fn add(mut self, rhs: Self) -> Self::Output {
-        self.0[0] += rhs.0[0];
-        self.0[1] += rhs.0[1];
+        self.c0 += rhs.c0;
+        self.c1 += rhs.c1;
         self
     }
 }
@@ -84,8 +99,8 @@ impl Sub<Self> for M31_4 {
     type Output = Self;
 
     fn sub(mut self, rhs: Self) -> Self::Output {
-        self.0[0] -= rhs.0[0];
-        self.0[1] -= rhs.0[1];
+        self.c0 -= rhs.c0;
+        self.c1 -= rhs.c1;
         self
     }
 }
@@ -102,22 +117,22 @@ impl Mul<Self> for M31_4 {
     type Output = Self;
 
     fn mul(mut self, rhs: Self) -> Self::Output {
-        let mut v0 = self.0[0];
-        v0 *= rhs.0[0];
-        let mut v1 = self.0[1];
-        v1 *= rhs.0[1];
+        let mut v0 = self.c0;
+        v0 *= rhs.c0;
+        let mut v1 = self.c1;
+        v1 *= rhs.c1;
 
-        let t = self.0[0];
-        self.0[1] += t;
+        let t = self.c0;
+        self.c1 += t;
 
-        let mut t0 = rhs.0[0];
-        t0 += rhs.0[1];
-        self.0[1] *= t0;
-        self.0[1] += v0;
-        self.0[1] += v1;
-        self.0[0] = v0;
+        let mut t0 = rhs.c0;
+        t0 += rhs.c1;
+        self.c1 *= t0;
+        self.c1 += v0;
+        self.c1 += v1;
+        self.c0 = v0;
         v1.mul_by_nonresidue();
-        self.0[0] += v1;
+        self.c0 += v1;
         self
     }
 }
@@ -170,7 +185,7 @@ impl Add<M31> for M31_4 {
     type Output = Self;
 
     fn add(mut self, rhs: M31) -> Self::Output {
-        self.0[0].0[0] += rhs;
+        self.c0.c0 += rhs;
         self
     }
 }
@@ -179,7 +194,7 @@ impl Sub<M31> for M31_4 {
     type Output = Self;
 
     fn sub(mut self, rhs: M31) -> Self::Output {
-        self.0[0].0[0] -= rhs;
+        self.c0.c0 -= rhs;
         self
     }
 }
@@ -188,24 +203,30 @@ impl Mul<M31> for M31_4 {
     type Output = Self;
 
     fn mul(mut self, rhs: M31) -> Self::Output {
-        self.0[0].0[0] *= rhs;
-        self.0[0].0[1] *= rhs;
-        self.0[1].0[0] *= rhs;
-        self.0[1].0[1] *= rhs;
+        self.c0.c0 *= rhs;
+        self.c0.c1 *= rhs;
+        self.c1.c0 *= rhs;
+        self.c1.c1 *= rhs;
         self
     }
 }
 
 impl From<M31> for M31_4 {
     fn from(v: M31) -> Self {
-        Self([M31_2([v, M31(0)]), M31_2([M31(0), M31(0)])])
+        Self {
+            c0: M31_2 {
+                c0: v,
+                c1: M31::ZERO,
+            },
+            c1: M31_2::ZERO,
+        }
     }
 }
 
 impl Hash for M31_4 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0[0].hash(state);
-        self.0[1].hash(state);
+        self.c0.hash(state);
+        self.c1.hash(state);
     }
 }
 
@@ -214,10 +235,10 @@ impl Display for M31_4 {
         write!(
             f,
             "F4[{}, {}, {}, {}]",
-            self.0[0].0[0].as_reduced_u32(),
-            self.0[0].0[1].as_reduced_u32(),
-            self.0[1].0[0].as_reduced_u32(),
-            self.0[1].0[1].as_reduced_u32(),
+            self.c0.c0.as_reduced_u32(),
+            self.c0.c1.as_reduced_u32(),
+            self.c1.c0.as_reduced_u32(),
+            self.c1.c1.as_reduced_u32(),
         )
     }
 }
