@@ -154,9 +154,9 @@ impl Field for M31 {
     fn mul_assign(&mut self, other: &Self) {
         let product = self.0 * other.0; // since we're using u64 no need to care about overflow or
                                         // casting
-        let product_low = product & Self::ORDER;
-        let product_high = product >> 31;
-        self.0 = product_low + product_high
+        *self = Self(product & Self::ORDER);
+        let product_high = Self(product >> 31);
+        self.add_assign(&product_high);
     }
 
     fn negate(&mut self) {
@@ -249,4 +249,67 @@ impl Display for M31 {
 
 pub fn rand_fp_from_rng<R: rand::Rng>(rng: &mut R) -> M31 {
     M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_no_overflow() {
+        let mut a = M31(3);
+        let b = M31(5);
+        a.add_assign(&b);
+        a.add_assign(&b);
+        assert_eq!(a, M31(13));
+    }
+
+    #[test]
+    fn test_add_overflow() {
+        let mut a = M31(2147483646);
+        let b = M31(2147483646);
+        a.add_assign(&b);
+        a.add_assign(&b);
+        assert_eq!(a, M31(2147483644));
+    }
+
+    #[test]
+    fn test_sub_no_overflow() {
+        let mut a = M31(8);
+        let b = M31(5);
+        a.sub_assign(&b);
+        assert_eq!(a, M31(3));
+    }
+
+    #[test]
+    fn test_sub_overflow() {
+        let mut a = M31(1);
+        let b = M31(2);
+        a.sub_assign(&b);
+        assert_eq!(a, M31(2147483646));
+    }
+
+    #[test]
+    fn test_mul_no_overflow() {
+        let mut a = M31(8);
+        let b = M31(5);
+        a.mul_assign(&b);
+        assert_eq!(a, M31(40));
+    }
+
+    #[test]
+    fn test_mul_overflow() {
+        let mut a = M31(2147483646);
+        let b = M31(2);
+        a.mul_assign(&b);
+        assert_eq!(a, M31(2147483645));
+    }
+
+    #[test]
+    fn test_inverse() {
+        let mut a = M31(2173);
+        let inv = a.inverse().unwrap();
+        a.mul_assign(&inv);
+        assert_eq!(M31::ONE, a);
+    }
 }

@@ -147,8 +147,6 @@ pub fn verify<
         F::ONE,
     ));
     if res != claimed_sum.real_coeff() {
-        println!("{res} {claimed_sum}");
-        println!("failed at first eq");
         return false;
     }
 
@@ -188,52 +186,44 @@ pub fn verify<
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
 // NOTE: can be sped up if we precompute lagrange coeffs for a given size
 fn lagrange_interpolation<F: Field>(evals: &[F]) -> Vec<F> {
+    let multiply_polys = |a: &[F], b: &[F]| -> Vec<F> {
+        let mut result = vec![F::ZERO; a.len() + b.len() - 1];
+        a.iter().enumerate().for_each(|(i, c1)| {
+            b.iter().enumerate().for_each(|(j, c2)| {
+                let mut m = c1.clone();
+                m.mul_assign(c2);
+                result[i + j].add_assign(&m);
+            });
+        });
+
+        result
+    };
+
     let mut polynomial = vec![F::ZERO; evals.len()];
     evals.iter().enumerate().for_each(|(i, eval)| {
-        let denom = {
-            (0..evals.len()).fold(F::ONE, |mut acc, j| {
-                let mut i = F::from_usize(i);
-                let j = F::from_usize(j);
-                if i != j {
-                    i.sub_assign(&j);
-                    acc.mul_assign(&i);
-                    acc
-                } else {
-                    acc
-                }
-            })
-        };
-
-        let denom_inv = denom
-            .inverse()
-            .expect("lagrange coefficient denominator can not be zero");
-        let coeffs = {
-            let mut coeffs = vec![F::ZERO; evals.len()];
-            coeffs[0] = denom_inv;
-
-            for k in 0..evals.len() {
-                if k == i {
-                    continue;
-                }
-
-                let start = if k < i { k + 1 } else { k };
-                let mut new_coeffs = vec![F::ZERO; evals.len()];
-                for j in (0..start).rev() {
-                    new_coeffs[j + 1].add_assign(&coeffs[j]);
+        let mut coeffs = vec![F::ONE];
+        evals.iter().enumerate().for_each(|(j, _)| {
+            if i != j {
+                let denom_inv = {
                     let mut i = F::from_usize(i);
-                    i.mul_assign(&coeffs[j]);
-                    new_coeffs[j].sub_assign(&i);
-                }
-                coeffs = new_coeffs;
+                    let j = F::from_usize(j);
+                    i.sub_assign(&j);
+                    i.inverse().unwrap()
+                };
+
+                let mut new_coeffs = vec![F::ZERO; 2];
+                new_coeffs[0] = F::from_usize(j);
+                new_coeffs[0].negate();
+                new_coeffs[0].mul_assign(&denom_inv);
+                new_coeffs[1] = denom_inv;
+                coeffs = multiply_polys(&coeffs, &new_coeffs);
             }
+        });
 
-            coeffs
-        };
-
-        polynomial.iter_mut().zip(coeffs.iter()).for_each(|(v, c)| {
-            let mut eval = *eval;
-            eval.mul_assign(c);
-            v.add_assign(&eval);
+        coeffs.iter().enumerate().for_each(|(k, c)| {
+            let mut res = eval.clone();
+            res.mul_assign(c);
+            polynomial[k].add_assign(&res);
         });
     });
 
@@ -248,7 +238,9 @@ fn univariate_eval<F: Field>(coeffs: &[F], point: F) -> F {
         .rev()
         .fold(F::ZERO, |mut acc, (i, coeff)| {
             acc.add_assign(coeff);
-            acc.mul_assign(&point.pow(i as u32));
+            if i != 0 {
+                acc.mul_assign(&point);
+            }
             acc
         })
 }
@@ -259,6 +251,47 @@ mod tests {
     use crate::field::m31::{quartic::M31_4, M31};
     use rand::Rng;
     use std::marker::PhantomData;
+
+    #[test]
+    fn test_lagrange_2() {
+        let mut evals = vec![M31::default(); 2];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = lagrange_interpolation(&evals);
+        assert_eq!(evals[0], univariate_eval(&poly, M31::ZERO));
+        assert_eq!(evals[1], univariate_eval(&poly, M31::ONE));
+    }
+
+    #[test]
+    fn test_lagrange_3() {
+        let mut evals = vec![M31::default(); 3];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = lagrange_interpolation(&evals);
+        assert_eq!(evals[0], univariate_eval(&poly, M31::ZERO));
+        assert_eq!(evals[1], univariate_eval(&poly, M31::ONE));
+        assert_eq!(evals[2], univariate_eval(&poly, M31(2)));
+    }
+
+    #[test]
+    fn test_eval_2() {
+        // f(x) = 5 + 2x
+        let mut poly = vec![M31(5), M31(2)];
+
+        // f(2) = 9
+        assert_eq!(M31(9), univariate_eval(&poly, M31(2)));
+    }
+
+    #[test]
+    fn test_eval_3() {
+        // f(x) = 5 + 2x + 3x^2
+        let mut poly = vec![M31(5), M31(2), M31(3)];
+
+        // f(2) = 21
+        assert_eq!(M31(21), univariate_eval(&poly, M31(2)));
+    }
 
     pub struct MockPCS<F: Field> {
         _marker: PhantomData<F>,
