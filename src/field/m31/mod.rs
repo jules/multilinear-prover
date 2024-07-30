@@ -82,6 +82,7 @@ impl M31 {
 impl Field for M31 {
     const ZERO: Self = Self(0);
     const ONE: Self = Self(1);
+    const NUM_BYTES_IN_REPR: usize = 4;
 
     fn from_usize(value: usize) -> Self {
         let value = value as u64;
@@ -176,12 +177,15 @@ impl Field for M31 {
     fn div2(&mut self) {
         *self = self.div_2exp_u64(1);
     }
+
+    fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR] {
+        self.as_reduced_u32().to_le_bytes()
+    }
 }
 
 impl PrimeField for M31 {
     const TWO: Self = Self(2);
     const MINUS_ONE: Self = Self(Self::ORDER - 1);
-    const NUM_BYTES_IN_REPR: usize = 8;
     const CHAR_BITS: usize = 31;
     const CHARACTERISTICS: u64 = Self::ORDER;
 
@@ -224,10 +228,6 @@ impl PrimeField for M31 {
         } else {
             Self::ZERO
         }
-    }
-
-    fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR] {
-        self.0.to_le_bytes()
     }
 
     fn increment_unchecked(&'_ mut self) {

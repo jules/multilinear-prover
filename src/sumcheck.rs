@@ -87,7 +87,7 @@ pub fn prove<
     let res = poly_lifted.evals[0];
 
     // Do PCS work here and wrap up proof.
-    let commitment = PCS::commit(&poly.lift::<E>());
+    let commitment = PCS::commit(&[poly.lift::<E>()]);
     let proof = PCS::open(&commitment, challenges, res);
 
     SumcheckProof {
@@ -116,8 +116,13 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>) -> (Vec<F>, Vec<F>) {
 /// - An evaluation proof of the polynomial oracle
 /// the verifier can then successfully run the sumcheck protocol and ensure that the proof is
 /// correct.
-pub fn verify<F: Field, T: Transcript<F>, PCS: PolynomialCommitmentScheme<F>>(
-    proof: SumcheckProof<F, PCS>,
+pub fn verify<
+    F: Field,
+    E: ChallengeField<F>,
+    T: Transcript<F>,
+    PCS: PolynomialCommitmentScheme<E>,
+>(
+    proof: SumcheckProof<E, PCS>,
     transcript: &mut T,
 ) -> bool {
     let SumcheckProof {
@@ -133,23 +138,51 @@ pub fn verify<F: Field, T: Transcript<F>, PCS: PolynomialCommitmentScheme<F>>(
     // - Draw a challenge based on the polynomial coefficients (just as we do in the prover)
     // - Check the polynomial at 0 and 1, to ensure equality with the claimed sum
     // - Reduce the claimed sum by evaluating the polynomial at the challenge point
-    for coeffs in proofs.into_iter() {
-        transcript.observe_witnesses(&coeffs);
-        let c = transcript.draw_challenge();
-        challenges.push(c);
+    let mut res = univariate_eval(
+        &proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>(),
+        F::ZERO,
+    );
+    res.add_assign(&univariate_eval(
+        &proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>(),
+        F::ONE,
+    ));
+    if res != claimed_sum.real_coeff() {
+        println!("{res} {claimed_sum}");
+        println!("failed at first eq");
+        return false;
+    }
 
+    transcript.observe_witnesses(
+        &proofs[0]
+            .iter()
+            .flat_map(|e| Into::<Vec<F>>::into(*e))
+            .collect::<Vec<F>>(),
+    );
+    let c = transcript.draw_challenge_ext();
+    challenges.push(c);
+    claimed_sum = univariate_eval(&proofs[0], c);
+    for (i, coeffs) in proofs.into_iter().enumerate().skip(1) {
         // NOTE: the first step of this verification should take place in the base field
-        let mut res = univariate_eval(&coeffs, F::ZERO);
-        res.add_assign(&univariate_eval(&coeffs, F::ONE));
+        let mut res = univariate_eval(&coeffs, E::ZERO);
+        res.add_assign(&univariate_eval(&coeffs, E::ONE));
         if res != claimed_sum {
+            println!("failed at {i}");
             return false;
         }
 
+        transcript.observe_witnesses(
+            &coeffs
+                .iter()
+                .flat_map(|e| Into::<Vec<F>>::into(*e))
+                .collect::<Vec<F>>(),
+        );
+        let c = transcript.draw_challenge_ext();
+        challenges.push(c);
         claimed_sum = univariate_eval(&coeffs, c);
     }
 
     // Finally, check the committed polynomial at the list of challenges.
-    PCS::verify(&commitment, challenges, res, proof)
+    PCS::verify(&commitment, challenges, claimed_sum, proof)
 }
 
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
@@ -235,7 +268,7 @@ mod tests {
         type Commitment = usize;
         type Proof = usize;
 
-        fn commit(poly: &MultilinearExtension<F>) -> Self::Commitment {
+        fn commit(poly: &[MultilinearExtension<F>]) -> Self::Commitment {
             0
         }
 
@@ -278,5 +311,14 @@ mod tests {
             _marker: PhantomData::<M31>,
         };
         let proof = prove::<_, M31_4, _, MockPCS<M31_4>>(&poly, &mut transcript);
+
+        let mut transcript = MockTranscript {
+            counter: 1,
+            _marker: PhantomData::<M31>,
+        };
+        assert!(verify::<_, M31_4, _, MockPCS<M31_4>>(
+            proof,
+            &mut transcript
+        ));
     }
 }

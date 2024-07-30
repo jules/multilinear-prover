@@ -22,6 +22,7 @@ impl Field for M31_4 {
         c0: M31_2::ONE,
         c1: M31_2::ZERO,
     };
+    const NUM_BYTES_IN_REPR: usize = M31::NUM_BYTES_IN_REPR * 4;
 
     fn from_usize(v: usize) -> Self {
         Self {
@@ -123,12 +124,27 @@ impl Field for M31_4 {
         self.c0.div2();
         self.c1.div2();
     }
+
+    fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR] {
+        self.c0
+            .c0
+            .as_reduced_u32()
+            .to_le_bytes()
+            .into_iter()
+            .chain(self.c0.c1.as_reduced_u32().to_le_bytes().into_iter())
+            .chain(self.c1.c0.as_reduced_u32().to_le_bytes().into_iter())
+            .chain(self.c1.c1.as_reduced_u32().to_le_bytes().into_iter())
+            .collect::<Vec<u8>>()
+            .try_into()
+            .expect("should be able to create bytes array")
+    }
 }
 
 impl ChallengeField<M31> for M31_4 {
     const DEGREE: usize = 4;
 
-    fn new(values: [M31; Self::DEGREE]) -> Self {
+    fn new(values: Vec<M31>) -> Self {
+        assert!(values.len() == Self::DEGREE);
         Self {
             c0: M31_2 {
                 c0: values[0],
@@ -154,6 +170,10 @@ impl ChallengeField<M31> for M31_4 {
         self.c0.c1.mul_assign(other);
         self.c1.c0.mul_assign(other);
         self.c1.c1.mul_assign(other);
+    }
+
+    fn real_coeff(&self) -> M31 {
+        self.c0.c0
     }
 }
 

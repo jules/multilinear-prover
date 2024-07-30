@@ -36,6 +36,7 @@ impl Field for M31_2 {
         c0: M31::ONE,
         c1: M31::ZERO,
     };
+    const NUM_BYTES_IN_REPR: usize = M31::NUM_BYTES_IN_REPR * 2;
 
     fn from_usize(v: usize) -> Self {
         Self {
@@ -133,6 +134,17 @@ impl Field for M31_2 {
     fn div2(&mut self) {
         self.c0.div2();
         self.c1.div2();
+    }
+
+    fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR] {
+        self.c0
+            .as_reduced_u32()
+            .to_le_bytes()
+            .into_iter()
+            .chain(self.c1.as_reduced_u32().to_le_bytes().into_iter())
+            .collect::<Vec<u8>>()
+            .try_into()
+            .expect("should be able to create bytes array")
     }
 }
 

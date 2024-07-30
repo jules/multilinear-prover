@@ -26,6 +26,7 @@ pub trait Field:
     const ZERO: Self;
     const ONE: Self;
     type CharField = Self;
+    const NUM_BYTES_IN_REPR: usize;
 
     fn from_usize(v: usize) -> Self;
 
@@ -61,12 +62,13 @@ pub trait Field:
             self.square();
         }
     }
+
+    fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR];
 }
 
 pub trait PrimeField: Field {
     const TWO: Self;
     const MINUS_ONE: Self;
-    const NUM_BYTES_IN_REPR: usize;
 
     const CHAR_BITS: usize;
     const CHARACTERISTICS: u64;
@@ -87,16 +89,15 @@ pub trait PrimeField: Field {
         }
     }
 
-    fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR];
-
     fn increment_unchecked(&'_ mut self);
 }
 
 pub trait ChallengeField<F: Field>: Field + Into<Vec<F>> + From<F> {
     const DEGREE: usize;
 
-    fn new(values: [F; Self::DEGREE]) -> Self;
+    fn new(values: Vec<F>) -> Self;
     fn add_base(&mut self, other: &F);
     fn sub_base(&mut self, other: &F);
     fn mul_base(&mut self, other: &F);
+    fn real_coeff(&self) -> F;
 }

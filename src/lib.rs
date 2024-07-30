@@ -2,6 +2,8 @@
 #![feature(associated_type_defaults)]
 
 mod field;
+mod linear_code;
+mod merkle_tree;
 mod mle;
 mod pcs;
 mod sumcheck;
