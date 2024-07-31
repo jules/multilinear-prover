@@ -23,7 +23,7 @@ where
     fn commit(polys: &[MultilinearExtension<F>]) -> Self::Commitment {
         // Turn the polys into m x m matrices, then encode row-wise.
         // XXX: ensure same length
-        let log_size = polys.len().ilog2();
+        let log_size = polys[0].evals.len() >> 1;
         let matrices = polys
             .iter()
             .map(|poly| {
@@ -37,23 +37,9 @@ where
         // Build a merkle tree out of our encoded matrices. We populate the base layer with a hash
         // of each row and then work up.
         let row_size = log_size * LC::BLOWUP;
-        let leaves = matrices
-            .iter()
-            .flat_map(|matrix| {
-                matrix
-                    .chunks(row_size as usize)
-                    .map(|row| {
-                        let mut hasher = Blake2s256::new();
-                        row.iter()
-                            .for_each(|el| hasher.update(el.to_le_bytes().to_vec()));
-                        <[u8; 32]>::from(hasher.finalize())
-                    })
-                    .collect::<Vec<[u8; 32]>>()
-            })
-            .collect::<Vec<[u8; 32]>>();
 
         // The merkle tree impl takes care of the layer-on-layer hashing.
-        let tree = MerkleTree::new(leaves);
+        let tree = MerkleTree::new(matrices.clone(), row_size as usize);
 
         (tree.root(), matrices)
     }
@@ -64,5 +50,25 @@ where
 
     fn verify(comm: &Self::Commitment, eval: Vec<F>, result: F, proof: Self::Proof) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        field::m31::M31, linear_code::reed_solomon::ReedSolomonCode, mle::MultilinearExtension,
+    };
+    use rand::Rng;
+
+    #[test]
+    fn commit_single_poly() {
+        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = MultilinearExtension::new(evals);
+
+        let commitment = TensorPCS::<M31, ReedSolomonCode<M31>>::commit(&[poly]);
     }
 }

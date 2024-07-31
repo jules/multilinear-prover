@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn test_eval_2() {
         // f(x) = 5 + 2x
-        let mut poly = vec![M31(5), M31(2)];
+        let poly = vec![M31(5), M31(2)];
 
         // f(2) = 9
         assert_eq!(M31(9), univariate_eval(&poly, M31(2)));
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn test_eval_3() {
         // f(x) = 5 + 2x + 3x^2
-        let mut poly = vec![M31(5), M31(2), M31(3)];
+        let poly = vec![M31(5), M31(2), M31(3)];
 
         // f(2) = 21
         assert_eq!(M31(21), univariate_eval(&poly, M31(2)));
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn test_eval_ext() {
         // f(x) = 5 + 2x
-        let mut poly = vec![M31(5), M31(2)];
+        let poly = vec![M31(5), M31(2)];
 
         // f([2, 0]) = 9
         assert_eq!(

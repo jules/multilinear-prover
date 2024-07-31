@@ -104,6 +104,7 @@ mod tests {
     use super::*;
     use crate::field::{m31::M31, Field};
     use rand::Rng;
+
     #[test]
     fn test_fixing_consistency() {
         let mut evals = vec![M31::default(); 16];
