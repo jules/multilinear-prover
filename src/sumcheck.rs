@@ -39,7 +39,6 @@ pub fn prove<
     let n_rounds = poly.num_vars();
     let mut proofs = Vec::with_capacity(n_rounds);
     let mut challenges = Vec::with_capacity(n_rounds);
-    let mut poly_lifted = poly.lift::<E>();
 
     // In the first round we have no challenge to fix the polynomial with, and we also need to
     // collect the claimed sum from this step. This allows the verifier to reductively check all
@@ -52,42 +51,56 @@ pub fn prove<
     let coeffs = coeffs.into_iter().map(|c| E::from(c)).collect::<Vec<E>>();
     proofs.push(coeffs);
 
-    // For the remaining rounds, we always start by fixing the polynomial on a challenge
-    // element, and then performing sumcheck steps accordingly.
-    for i in 0..(n_rounds - 1) {
-        transcript.observe_witnesses(
-            &proofs[i]
-                .iter()
-                .flat_map(|c| Into::<Vec<F>>::into(*c))
-                .collect::<Vec<F>>(),
-        );
-        let challenge = transcript.draw_challenge_ext::<E>();
-        challenges.push(challenge);
-
-        poly_lifted.fix_variable(challenge);
-        proofs.push(sumcheck_step(&poly_lifted).0);
-    }
-
-    // Here we need to commit to the full polynomial and pack it into the proof with an evaluation.
-    // This provides the verifier with oracle access to the concerning polynomial and lets her
-    // check the final summation in the verification procedure.
-
-    // Retrieve the final sum at which we open the committed poly.
+    // For the next round, we lift to the extension by using the first challenge.
     transcript.observe_witnesses(
-        &proofs[n_rounds - 1]
+        &proofs[0]
             .iter()
             .flat_map(|c| Into::<Vec<F>>::into(*c))
             .collect::<Vec<F>>(),
     );
     let challenge = transcript.draw_challenge_ext::<E>();
     challenges.push(challenge);
-    poly_lifted.fix_variable(challenge);
+
+    let mut poly_lifted = poly.fix_variable_ext::<E>(challenge);
+
+    // For the remaining rounds, we always start by fixing the polynomial on a challenge
+    // element, and then performing sumcheck steps accordingly.
+    for i in 0..(n_rounds - 1) {
+        let (coeffs, evals) = sumcheck_step(&poly_lifted);
+        proofs.push(coeffs);
+        if i == 0 {
+            println!("{:?}", proofs[i + 1]);
+            println!(
+                "first claimed sum is {}",
+                evals.iter().fold(E::ZERO, |mut acc, x| {
+                    acc.add_assign(x);
+                    acc
+                })
+            );
+        }
+
+        transcript.observe_witnesses(
+            &proofs[i + 1]
+                .iter()
+                .flat_map(|c| Into::<Vec<F>>::into(*c))
+                .collect::<Vec<F>>(),
+        );
+        let challenge = transcript.draw_challenge_ext::<E>();
+        challenges.push(challenge);
+        poly_lifted.fix_variable(challenge);
+    }
+
+    // Here we need to commit to the full polynomial and pack it into the proof with an evaluation.
+    // This provides the verifier with oracle access to the concerning polynomial and lets her
+    // check the final summation in the verification procedure.
+
     debug_assert!(poly_lifted.num_vars() == 0);
     debug_assert!(poly_lifted.evals.len() == 1);
+    // Retrieve the final sum at which we open the committed poly.
     let res = poly_lifted.evals[0];
 
-    // Do PCS work here and wrap up proof.
-    let commitment = PCS::commit(&[poly.lift::<E>()]);
+    // Do PCS work now and wrap up proof.
+    let commitment = PCS::commit(&[poly.lift::<E>(challenge)]);
     let proof = PCS::open(&commitment, challenges, res);
 
     SumcheckProof {
@@ -138,14 +151,9 @@ pub fn verify<
     // - Draw a challenge based on the polynomial coefficients (just as we do in the prover)
     // - Check the polynomial at 0 and 1, to ensure equality with the claimed sum
     // - Reduce the claimed sum by evaluating the polynomial at the challenge point
-    let mut res = univariate_eval(
-        &proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>(),
-        F::ZERO,
-    );
-    res.add_assign(&univariate_eval(
-        &proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>(),
-        F::ONE,
-    ));
+    let base_field_coeffs = proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>();
+    let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
+    res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
     if res != claimed_sum.real_coeff() {
         return false;
     }
@@ -159,11 +167,15 @@ pub fn verify<
     let c = transcript.draw_challenge_ext();
     challenges.push(c);
     claimed_sum = univariate_eval(&proofs[0], c);
+
+    // We performed the base field check so now we proceed into the extension field.
     for (i, coeffs) in proofs.into_iter().enumerate().skip(1) {
-        // NOTE: the first step of this verification should take place in the base field
+        println!("{coeffs:?}");
         let mut res = univariate_eval(&coeffs, E::ZERO);
         res.add_assign(&univariate_eval(&coeffs, E::ONE));
         if res != claimed_sum {
+            println!("{res}");
+            println!("{claimed_sum}");
             println!("failed at {i}");
             return false;
         }
@@ -238,6 +250,21 @@ fn univariate_eval<F: Field>(coeffs: &[F], point: F) -> F {
         .rev()
         .fold(F::ZERO, |mut acc, (i, coeff)| {
             acc.add_assign(coeff);
+            if i != 0 {
+                acc.mul_assign(&point);
+            }
+            acc
+        })
+}
+
+// Horner's method evaluation that raises into an extension field.
+fn univariate_eval_ext<F: Field, E: ChallengeField<F>>(coeffs: &[F], point: E) -> E {
+    coeffs
+        .iter()
+        .enumerate()
+        .rev()
+        .fold(E::ZERO, |mut acc, (i, coeff)| {
+            acc.add_base(coeff);
             if i != 0 {
                 acc.mul_assign(&point);
             }
@@ -334,7 +361,7 @@ mod tests {
 
     #[test]
     fn mock_pcs_test() {
-        let mut evals = vec![M31::default(); 2u32.pow(16) as usize];
+        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
         evals
             .iter_mut()
             .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));

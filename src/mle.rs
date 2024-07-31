@@ -29,13 +29,21 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// Lifts the MLE to an extension field. Used for accommodating extension field challenge
     /// evaluations and such.
-    pub fn lift<E: ChallengeField<F>>(&self) -> MultilinearExtension<E> {
-        let new_evals = self.evals.iter().map(|e| (*e).into()).collect::<Vec<E>>();
+    pub fn lift<E: ChallengeField<F>>(&self, challenge: E) -> MultilinearExtension<E> {
+        let new_evals = self
+            .evals
+            .iter()
+            .map(|e| {
+                let mut c = challenge;
+                c.mul_base(e);
+                c
+            })
+            .collect::<Vec<E>>();
         MultilinearExtension::<E>::new(new_evals)
     }
 
     /// Sets the first variable of the polynomial to `point`. Used for fixing sumcheck challenges
-    /// into the polynomial. Supports the use of an extension field challenge.
+    /// into the polynomial.
     pub fn fix_variable(&mut self, point: F) {
         // TODO: par
         // TODO: binius highly optimizes this
@@ -44,11 +52,29 @@ impl<F: Field> MultilinearExtension<F> {
             s.sub_assign(&self.evals[i << 1]);
             let mut res = point;
             res.mul_assign(&s);
-            self.evals[i].add_assign(&res);
+            res.add_assign(&self.evals[i << 1]);
+            self.evals[i] = res;
         }
 
         self.num_vars -= 1;
         self.evals.truncate(1 << self.num_vars);
+    }
+
+    pub fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> MultilinearExtension<E> {
+        let mut new_evals = vec![E::ZERO; 1 << (self.num_vars - 1)];
+        for i in 0..(1 << (self.num_vars - 1)) {
+            let mut s = self.evals[(i << 1) + 1];
+            s.sub_assign(&self.evals[i << 1]);
+            let mut res = point;
+            res.mul_base(&s);
+            res.add_base(&self.evals[i << 1]);
+            new_evals[i] = res;
+        }
+
+        MultilinearExtension::<E> {
+            num_vars: self.num_vars - 1,
+            evals: new_evals,
+        }
     }
 
     /// Sums all the evaluations of the polynomial at f(0, ...) and f(1, ...).
