@@ -66,18 +66,8 @@ pub fn prove<
     // For the remaining rounds, we always start by fixing the polynomial on a challenge
     // element, and then performing sumcheck steps accordingly.
     for i in 0..(n_rounds - 1) {
-        let (coeffs, evals) = sumcheck_step(&poly_lifted);
+        let (coeffs, _) = sumcheck_step(&poly_lifted);
         proofs.push(coeffs);
-        if i == 0 {
-            println!("{:?}", proofs[i + 1]);
-            println!(
-                "first claimed sum is {}",
-                evals.iter().fold(E::ZERO, |mut acc, x| {
-                    acc.add_assign(x);
-                    acc
-                })
-            );
-        }
 
         transcript.observe_witnesses(
             &proofs[i + 1]
@@ -129,6 +119,8 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>) -> (Vec<F>, Vec<F>) {
 /// - An evaluation proof of the polynomial oracle
 /// the verifier can then successfully run the sumcheck protocol and ensure that the proof is
 /// correct.
+// TODO(opt): the highest coeff can be omitted and should simplify the verification procedure. ref:
+// binius
 pub fn verify<
     F: Field,
     E: ChallengeField<F>,
@@ -170,13 +162,9 @@ pub fn verify<
 
     // We performed the base field check so now we proceed into the extension field.
     for (i, coeffs) in proofs.into_iter().enumerate().skip(1) {
-        println!("{coeffs:?}");
         let mut res = univariate_eval(&coeffs, E::ZERO);
         res.add_assign(&univariate_eval(&coeffs, E::ONE));
         if res != claimed_sum {
-            println!("{res}");
-            println!("{claimed_sum}");
-            println!("failed at {i}");
             return false;
         }
 
@@ -259,11 +247,15 @@ fn univariate_eval<F: Field>(coeffs: &[F], point: F) -> F {
 
 // Horner's method evaluation that raises into an extension field.
 fn univariate_eval_ext<F: Field, E: ChallengeField<F>>(coeffs: &[F], point: E) -> E {
+    let mut init = point.clone();
+    init.mul_base(&coeffs[coeffs.len() - 1]);
+
     coeffs
         .iter()
         .enumerate()
         .rev()
-        .fold(E::ZERO, |mut acc, (i, coeff)| {
+        .skip(1)
+        .fold(init, |mut acc, (i, coeff)| {
             acc.add_base(coeff);
             if i != 0 {
                 acc.mul_assign(&point);
@@ -303,6 +295,18 @@ mod tests {
     }
 
     #[test]
+    fn test_lagrange_20() {
+        let mut evals = vec![M31::default(); 20];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = lagrange_interpolation(&evals);
+        for i in 0..20 {
+            assert_eq!(evals[i], univariate_eval(&poly, M31::from_usize(i)));
+        }
+    }
+
+    #[test]
     fn test_eval_2() {
         // f(x) = 5 + 2x
         let mut poly = vec![M31(5), M31(2)];
@@ -318,6 +322,18 @@ mod tests {
 
         // f(2) = 21
         assert_eq!(M31(21), univariate_eval(&poly, M31(2)));
+    }
+
+    #[test]
+    fn test_eval_ext() {
+        // f(x) = 5 + 2x
+        let mut poly = vec![M31(5), M31(2)];
+
+        // f([2, 0]) = 9
+        assert_eq!(
+            M31_4::from_usize(9),
+            univariate_eval_ext(&poly, M31_4::from_usize(2))
+        );
     }
 
     pub struct MockPCS<F: Field> {

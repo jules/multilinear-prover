@@ -84,7 +84,7 @@ impl<F: Field> MultilinearExtension<F> {
         // f(0, 0, ..., 0) and f(1, 0, ..., 0).
         let mut evals_0 = F::ZERO;
         let mut evals_1 = F::ZERO;
-        for i in 0..self.num_vars() - 1 {
+        for i in 0..(1 << (self.num_vars() - 1)) {
             evals_0.add_assign(&self.eval(i << 1));
             evals_1.add_assign(&self.eval((i << 1) + 1));
         }
@@ -97,4 +97,47 @@ pub struct MultilinearComposite<F: Field> {
     polys: Vec<MultilinearExtension<F>>,
     num_vars: usize,
     evals: Vec<F>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::field::{m31::M31, Field};
+    use rand::Rng;
+    #[test]
+    fn test_fixing_consistency() {
+        let mut evals = vec![M31::default(); 16];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..5)));
+        let mut poly = MultilinearExtension::new(evals);
+
+        let c = M31(2);
+
+        let summed_fixed = {
+            let evals = poly.sum_evaluations();
+            let mut p0 = evals[0];
+            let p1 = evals[1];
+
+            // p0 + c * (p1 - p0)
+            let mut rhs = p1;
+            rhs.sub_assign(&p0);
+            let mut c = c.clone();
+            c.mul_assign(&rhs);
+
+            p0.add_assign(&c);
+            p0
+        };
+
+        let fn_fixed = {
+            poly.fix_variable(c);
+            let evals = poly.sum_evaluations();
+            let mut p0 = evals[0];
+            let p1 = evals[1];
+            p0.add_assign(&p1);
+            p0
+        };
+
+        assert_eq!(summed_fixed, fn_fixed);
+    }
 }
