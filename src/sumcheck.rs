@@ -10,12 +10,17 @@ use crate::{
 /// A proof produced by running the Sumcheck protocol. Contains the interpolated polynomials at
 /// each variable, the initial claimed sum, a commitment and an opening proof of the polynomial on
 /// which the protocol was ran.
-pub struct SumcheckProof<F: Field, PCS: PolynomialCommitmentScheme<F>> {
-    proofs: Vec<Vec<F>>,
+pub struct SumcheckProof<
+    F: Field,
+    T: Transcript<F>,
+    E: ChallengeField<F>,
+    PCS: PolynomialCommitmentScheme<F, T, E>,
+> {
+    proofs: Vec<Vec<E>>,
     claimed_sum: F,
     commitment: PCS::Commitment,
     proof: PCS::Proof,
-    res: F,
+    res: E,
 }
 
 /// Runs the sumcheck prover. Given a polynomial and some abstracted transcript, we:
@@ -31,11 +36,11 @@ pub fn prove<
     F: Field,
     E: ChallengeField<F>,
     T: Transcript<F>,
-    PCS: PolynomialCommitmentScheme<E>,
+    PCS: PolynomialCommitmentScheme<F, T, E>,
 >(
     poly: &MultilinearExtension<F>,
     transcript: &mut T,
-) -> SumcheckProof<E, PCS> {
+) -> SumcheckProof<F, T, E, PCS> {
     let n_rounds = poly.num_vars();
     let mut proofs = Vec::with_capacity(n_rounds);
     let mut challenges = Vec::with_capacity(n_rounds);
@@ -90,12 +95,12 @@ pub fn prove<
     let res = poly_lifted.evals[0];
 
     // Do PCS work now and wrap up proof.
-    let commitment = PCS::commit(&[poly.lift::<E>(challenge)]);
-    let proof = PCS::open(&commitment, challenges, res);
+    let commitment = PCS::commit(&[poly.clone()]);
+    let proof = PCS::prove(&commitment, challenges, res, transcript);
 
     SumcheckProof {
         proofs,
-        claimed_sum: claimed_sum.into(),
+        claimed_sum,
         commitment,
         proof,
         res,
@@ -125,9 +130,9 @@ pub fn verify<
     F: Field,
     E: ChallengeField<F>,
     T: Transcript<F>,
-    PCS: PolynomialCommitmentScheme<E>,
+    PCS: PolynomialCommitmentScheme<F, T, E>,
 >(
-    proof: SumcheckProof<E, PCS>,
+    proof: SumcheckProof<F, T, E, PCS>,
     transcript: &mut T,
 ) -> bool {
     let SumcheckProof {
@@ -146,7 +151,7 @@ pub fn verify<
     let base_field_coeffs = proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>();
     let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
     res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
-    if res != claimed_sum.real_coeff() {
+    if res != claimed_sum {
         return false;
     }
 
@@ -158,7 +163,7 @@ pub fn verify<
     );
     let c = transcript.draw_challenge_ext();
     challenges.push(c);
-    claimed_sum = univariate_eval(&proofs[0], c);
+    let mut claimed_sum = univariate_eval(&proofs[0], c);
 
     // We performed the base field check so now we proceed into the extension field.
     for (i, coeffs) in proofs.into_iter().enumerate().skip(1) {
@@ -180,7 +185,7 @@ pub fn verify<
     }
 
     // Finally, check the committed polynomial at the list of challenges.
-    PCS::verify(&commitment, challenges, claimed_sum, proof)
+    PCS::verify(&commitment, challenges, claimed_sum, proof, transcript)
 }
 
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...

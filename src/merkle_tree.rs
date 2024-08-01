@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 
 pub struct MerkleTree<F: Field> {
     root: [u8; 32],
-    elements: Vec<Vec<[u8; 32]>>,
+    elements: Vec<Vec<[u8; 32]>>, // bottom layer first
     _marker: PhantomData<F>,
 }
 
@@ -12,6 +12,8 @@ impl<F: Field> MerkleTree<F>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
 {
+    /// Constructs a new MerkleTree from matrices of elements. Each row is hashed and then 2-arity
+    /// hashing up to the root is performed.
     pub fn new(elements: Vec<Vec<F>>, row_size: usize) -> Self {
         debug_assert!(elements[0].len().is_power_of_two());
         // Create initial leaves.
