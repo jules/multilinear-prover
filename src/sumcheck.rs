@@ -344,27 +344,46 @@ mod tests {
     }
 
     #[derive(Default)]
-    pub struct MockPCS<F: Field> {
-        _marker: PhantomData<F>,
+    pub struct MockPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>> {
+        _f_marker: PhantomData<F>,
+        _t_marker: PhantomData<T>,
+        _e_marker: PhantomData<E>,
     }
 
-    impl<F: Field> PolynomialCommitmentScheme<F> for MockPCS<F> {
+    impl<F: Field, T: Transcript<F>, E: ChallengeField<F>> PolynomialCommitmentScheme<F, T, E>
+        for MockPCS<F, T, E>
+    {
         type Commitment = usize;
         type Proof = usize;
 
-        fn commit(poly: &[MultilinearExtension<F>]) -> Self::Commitment {
+        fn commit(&self, poly: &[MultilinearExtension<F>]) -> Self::Commitment {
             0
         }
 
-        fn open(comm: &Self::Commitment, eval: Vec<F>, result: F) -> Self::Proof {
+        fn prove(
+            &self,
+            comm: &Self::Commitment,
+            polys: &[MultilinearExtension<F>],
+            eval: Vec<E>,
+            result: E,
+            transcript: &mut T,
+        ) -> Self::Proof {
             0
         }
 
-        fn verify(comm: &Self::Commitment, eval: Vec<F>, result: F, proof: Self::Proof) -> bool {
+        fn verify(
+            &self,
+            comm: &Self::Commitment,
+            eval: Vec<E>,
+            result: E,
+            proof: Self::Proof,
+            transcript: &mut T,
+        ) -> bool {
             true
         }
     }
 
+    #[derive(Default)]
     pub struct MockTranscript<F: Field> {
         counter: usize,
         _marker: PhantomData<F>,
@@ -397,17 +416,25 @@ mod tests {
             counter: 1,
             _marker: PhantomData::<M31>,
         };
-        let proof =
-            prove::<_, M31_4, _, MockPCS<M31_4>>(&poly, &mut transcript, MockPCS::default());
+        let proof = prove::<_, M31_4, _, _>(
+            &poly,
+            &mut transcript,
+            MockPCS::<M31, MockTranscript<M31>, M31_4>::default(),
+        );
 
         let mut transcript = MockTranscript {
             counter: 1,
             _marker: PhantomData::<M31>,
         };
-        assert!(verify::<_, M31_4, _, MockPCS<M31_4>>(
+        assert!(verify::<
+            _,
+            M31_4,
+            _,
+            MockPCS<M31, MockTranscript<M31>, M31_4>,
+        >(
             proof,
             &mut transcript,
-            MockPCS::default()
+            MockPCS::<M31, MockTranscript<M31>, M31_4>::default()
         ));
     }
 }

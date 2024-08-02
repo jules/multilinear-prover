@@ -61,13 +61,20 @@ where
         }
     }
 
-    pub fn get_proof(&self, mut index: usize) -> Vec<[u8; 32]> {
+    pub fn get_proof(&self, mut index: usize) -> Vec<Vec<[u8; 32]>> {
         let mut path = Vec::with_capacity(self.elements.len());
-        path.push(self.elements[0][index]); // leaf
-        for i in 1..self.elements.len() {
+        let mut base_layer = vec![];
+        base_layer.push(self.elements[0][index]); // leaf
+        base_layer.push(self.elements[0][index ^ 1]); // neighboring element
+        path.push(base_layer);
+        for i in 1..(self.elements.len() - 1) {
+            let mut layer = vec![];
             index >>= 1;
-            path.push(self.elements[i][index]);
+            layer.push(self.elements[i][index]);
+            layer.push(self.elements[i][index ^ 1]);
+            path.push(layer);
         }
+        path.push(vec![self.elements[self.elements.len() - 1][0]]);
 
         path
     }
@@ -75,4 +82,17 @@ where
     pub fn root(&self) -> [u8; 32] {
         self.root
     }
+}
+
+pub fn verify_path(path: Vec<Vec<[u8; 32]>>) -> bool {
+    for i in 0..(path.len() - 1) {
+        let mut hasher = Blake2s256::new();
+        path[i].iter().for_each(|e| hasher.update(e));
+        let hash = <[u8; 32]>::from(hasher.finalize());
+        if path[i + 1].iter().all(|e| *e != hash) {
+            return false;
+        }
+    }
+
+    true
 }
