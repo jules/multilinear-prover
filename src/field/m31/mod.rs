@@ -86,8 +86,7 @@ impl Field for M31 {
 
     fn from_usize(value: usize) -> Self {
         let value = value as u64;
-        debug_assert!(value < Self::ORDER);
-        Self(value)
+        Self::from_negative_u64_with_reduction(value)
     }
 
     #[inline(always)]

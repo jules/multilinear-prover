@@ -10,14 +10,14 @@ impl<F: Field, E: ChallengeField<F>> LinearCode<F, E> for ReedSolomonCode<F, E> 
     const BLOWUP: usize = 4;
 
     fn encode(els: &[F]) -> Vec<F> {
-        let mut els = els.clone().to_vec();
+        let mut els = els.to_vec();
         els.extend(els.clone());
         els.extend(els.clone());
         els
     }
 
     fn encode_ext(els: &[E]) -> Vec<E> {
-        let mut els = els.clone().to_vec();
+        let mut els = els.to_vec();
         els.extend(els.clone());
         els.extend(els.clone());
         els
