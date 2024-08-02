@@ -16,4 +16,5 @@ mod mle;
 mod pcs;
 mod sumcheck;
 mod transcript;
+mod univariate_utils;
 mod worker;
