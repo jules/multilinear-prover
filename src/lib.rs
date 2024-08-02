@@ -1,5 +1,6 @@
 #![feature(generic_const_exprs)]
 #![feature(associated_type_defaults)]
+#![feature(isqrt)]
 
 //mod fft;
 mod field;

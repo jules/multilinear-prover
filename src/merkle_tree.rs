@@ -14,18 +14,18 @@ where
 {
     /// Constructs a new MerkleTree from matrices of elements. Each row is hashed and then 2-arity
     /// hashing up to the root is performed.
-    pub fn new(elements: Vec<Vec<F>>, row_size: usize) -> Self {
+    pub fn new(elements: Vec<Vec<F>>, row_size: usize, col_size: usize) -> Self {
         debug_assert!(elements[0].len().is_power_of_two());
         // Create initial leaves.
         let leaves = elements
             .iter()
             .flat_map(|matrix| {
-                matrix
-                    .chunks(row_size)
-                    .map(|row| {
+                (0..row_size)
+                    .map(|i| {
                         let mut hasher = Blake2s256::new();
-                        row.iter()
-                            .for_each(|el| hasher.update(el.to_le_bytes().to_vec()));
+                        (0..col_size).for_each(|j| {
+                            hasher.update(matrix[i + j * row_size].to_le_bytes().to_vec());
+                        });
                         <[u8; 32]>::from(hasher.finalize())
                     })
                     .collect::<Vec<[u8; 32]>>()
@@ -59,6 +59,17 @@ where
             elements: layers,
             _marker: PhantomData::<F>,
         }
+    }
+
+    pub fn get_proof(&self, mut index: usize) -> Vec<[u8; 32]> {
+        let mut path = Vec::with_capacity(self.elements.len());
+        path.push(self.elements[0][index]); // leaf
+        for i in 1..self.elements.len() {
+            index >>= 1;
+            path.push(self.elements[i][index]);
+        }
+
+        path
     }
 
     pub fn root(&self) -> [u8; 32] {

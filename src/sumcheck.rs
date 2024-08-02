@@ -40,6 +40,7 @@ pub fn prove<
 >(
     poly: &MultilinearExtension<F>,
     transcript: &mut T,
+    pcs: PCS,
 ) -> SumcheckProof<F, T, E, PCS> {
     let n_rounds = poly.num_vars();
     let mut proofs = Vec::with_capacity(n_rounds);
@@ -95,8 +96,8 @@ pub fn prove<
     let res = poly_lifted.evals[0];
 
     // Do PCS work now and wrap up proof.
-    let commitment = PCS::commit(&[poly.clone()]);
-    let proof = PCS::prove(&commitment, challenges, res, transcript);
+    let commitment = pcs.commit(&[poly.clone()]);
+    let proof = pcs.prove(&commitment, &[poly.clone()], challenges, res, transcript);
 
     SumcheckProof {
         proofs,
@@ -134,6 +135,7 @@ pub fn verify<
 >(
     proof: SumcheckProof<F, T, E, PCS>,
     transcript: &mut T,
+    pcs: PCS,
 ) -> bool {
     let SumcheckProof {
         proofs,
@@ -185,7 +187,7 @@ pub fn verify<
     }
 
     // Finally, check the committed polynomial at the list of challenges.
-    PCS::verify(&commitment, challenges, claimed_sum, proof, transcript)
+    pcs.verify(&commitment, challenges, claimed_sum, proof, transcript)
 }
 
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
@@ -341,6 +343,7 @@ mod tests {
         );
     }
 
+    #[derive(Default)]
     pub struct MockPCS<F: Field> {
         _marker: PhantomData<F>,
     }
@@ -376,6 +379,9 @@ mod tests {
             self.counter += 1;
             E::from(F::from_usize(self.counter))
         }
+        fn draw_bits(&mut self, bits: usize) -> usize {
+            0
+        }
         fn observe_witness(&mut self, witness: F) {}
         fn observe_witnesses(&mut self, witness: &[F]) {}
     }
@@ -391,7 +397,8 @@ mod tests {
             counter: 1,
             _marker: PhantomData::<M31>,
         };
-        let proof = prove::<_, M31_4, _, MockPCS<M31_4>>(&poly, &mut transcript);
+        let proof =
+            prove::<_, M31_4, _, MockPCS<M31_4>>(&poly, &mut transcript, MockPCS::default());
 
         let mut transcript = MockTranscript {
             counter: 1,
@@ -399,7 +406,8 @@ mod tests {
         };
         assert!(verify::<_, M31_4, _, MockPCS<M31_4>>(
             proof,
-            &mut transcript
+            &mut transcript,
+            MockPCS::default()
         ));
     }
 }
