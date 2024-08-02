@@ -30,7 +30,6 @@ pub trait Field:
 
     fn from_usize(v: usize) -> Self;
 
-    // zero check
     fn is_zero(&self) -> bool;
     fn inverse(&self) -> Option<Self>;
 

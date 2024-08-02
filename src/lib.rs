@@ -10,11 +10,11 @@
 
 //mod fft;
 mod field;
+mod iop;
 mod linear_code;
 mod merkle_tree;
 mod mle;
 mod pcs;
-mod sumcheck;
 mod transcript;
 mod univariate_utils;
 mod worker;
