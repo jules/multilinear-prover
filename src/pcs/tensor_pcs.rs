@@ -7,10 +7,7 @@ use crate::{
     transcript::Transcript,
 };
 use blake2::{Blake2s256, Digest};
-use core::{
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-};
+use core::marker::PhantomData;
 
 /// [DP23]: https://eprint.iacr.org/2023/630.pdf
 pub struct TensorPCS<F: Field, LC: LinearCode<F>> {
@@ -25,10 +22,10 @@ where
     [(); F::NUM_BYTES_IN_REPR]:,
 {
     type Commitment = (MerkleTree<F>, Vec<Vec<F>>);
-    type Proof = Vec<[u8; 32]>;
+    type Proof = Vec<(Vec<[u8; 32]>, Vec<Vec<F>>)>;
 
     fn commit(&self, polys: &[MultilinearExtension<F>]) -> Self::Commitment {
-        // Turn the polys into m x m matrices, then encode row-wise.
+        // Turn the polys into m x m matrices row-wise, then encode row-wise.
         // XXX: ensure same length
         let log_size = polys[0].evals.len().isqrt();
         let matrices = polys
@@ -41,12 +38,27 @@ where
             })
             .collect::<Vec<Vec<F>>>();
 
-        // Build a merkle tree out of our encoded matrices. We populate the base layer with a hash
-        // of each row and then work up.
+        // Create the column hashes for each matrix.
         let row_size = log_size * LC::BLOWUP;
+        let leaves = matrices
+            .iter()
+            .map(|matrix| {
+                (0..row_size)
+                    .map(|i| {
+                        let mut hasher = Blake2s256::new();
+                        (0..log_size).for_each(|j| {
+                            hasher.update(matrix[i + j * row_size].to_le_bytes().to_vec());
+                        });
+                        <[u8; 32]>::from(hasher.finalize())
+                    })
+                    .collect::<Vec<[u8; 32]>>()
+            })
+            .collect::<Vec<Vec<[u8; 32]>>>();
 
+        // Build a merkle tree out of our encoded matrices. We populate the base layer with a hash
+        // of each column and then work up.
         // The merkle tree impl takes care of the layer-on-layer hashing.
-        let tree = MerkleTree::new(matrices.clone(), row_size as usize, log_size);
+        let tree = MerkleTree::new(leaves, row_size as usize, log_size);
 
         (tree, matrices)
     }
@@ -109,14 +121,23 @@ where
         // Compute merkle proofs for n rows in the committed matrix. Extract columns to include
         // in the proof.
         // XXX figure out optimal n
-        let row_size = (log_size * LC::BLOWUP).ilog2();
+        let row_size = (log_size * LC::BLOWUP) as usize;
         (0..self.n_test_queries)
             .map(|_| {
                 // Sample a random index for a given row.
                 let index = transcript.draw_bits(row_size);
                 let path = comm.0.get_proof(index);
-                let col = comm.1[0].get_column(index);
-                (path, col)
+                // Extract a column per polynomial that we use in the proof.
+                let cols = comm
+                    .1
+                    .iter()
+                    .map(|matrix| {
+                        (0..log_size)
+                            .map(|i| matrix[i * row_size])
+                            .collect::<Vec<F>>()
+                    })
+                    .collect::<Vec<Vec<F>>>();
+                (path, cols)
             })
             .collect::<Vec<_>>()
     }
