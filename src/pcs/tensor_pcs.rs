@@ -73,7 +73,6 @@ where
         comm: &Self::Commitment,
         polys: &[MultilinearExtension<F>],
         eval: Vec<E>,
-        result: E,
         transcript: &mut T,
     ) -> Self::Proof {
         debug_assert!(eval.len() == polys[0].num_vars());
@@ -214,11 +213,11 @@ mod tests {
     }
 
     #[test]
-    fn commit_single_poly() {
+    fn commit_prove_single_poly() {
         let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-        evals
-            .iter_mut()
-            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        evals.iter_mut().for_each(|e| {
+            *e = M31(rand::thread_rng().gen_range(0..M31::ORDER));
+        });
         let poly = MultilinearExtension::new(evals);
 
         let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31>> {
@@ -228,6 +227,12 @@ mod tests {
             _e_marker: PhantomData::<M31_4>,
             _lc_marker: PhantomData::<ReedSolomonCode<M31>>,
         };
-        let commitment = pcs.commit(&[poly]);
+        let commitment = pcs.commit(&[poly.clone()]);
+
+        let mut eval = vec![M31_4::default(); poly.num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        let proof = pcs.prove(&commitment, &[poly], eval, &mut MockTranscript::default());
     }
 }

@@ -97,7 +97,7 @@ pub fn prove<
 
     // Do PCS work now and wrap up proof.
     let commitment = pcs.commit(&[poly.clone()]);
-    let proof = pcs.prove(&commitment, &[poly.clone()], challenges, res, transcript);
+    let proof = pcs.prove(&commitment, &[poly.clone()], challenges, transcript);
 
     SumcheckProof {
         proofs,
@@ -365,7 +365,6 @@ mod tests {
             comm: &Self::Commitment,
             polys: &[MultilinearExtension<F>],
             eval: Vec<E>,
-            result: E,
             transcript: &mut T,
         ) -> Self::Proof {
             0
