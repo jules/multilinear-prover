@@ -1,7 +1,7 @@
 use crate::{
     field::{ChallengeField, Field},
     linear_code::LinearCode,
-    merkle_tree::MerkleTree,
+    merkle_tree::{verify_path, MerkleTree},
     mle::MultilinearExtension,
     pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
@@ -10,7 +10,7 @@ use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
 
 /// [DP23]: https://eprint.iacr.org/2023/630.pdf
-pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
+pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F, E>> {
     n_test_queries: usize,
     _f_marker: PhantomData<F>,
     _t_marker: PhantomData<T>,
@@ -18,7 +18,7 @@ pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: Linea
     _lc_marker: PhantomData<LC>,
 }
 
-impl<F: Field, LC: LinearCode<F>, T: Transcript<F>, E: ChallengeField<F>>
+impl<F: Field, LC: LinearCode<F, E>, T: Transcript<F>, E: ChallengeField<F>>
     PolynomialCommitmentScheme<F, T, E> for TensorPCS<F, T, E, LC>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
@@ -97,24 +97,32 @@ where
 
         // Mix all t' into one using challenges.
         let n_challenges = comm.1.len().ilog2() as usize;
-        let t_primes = if n_challenges > 0 {
+        let t_prime: Vec<E> = if n_challenges > 0 {
             //let mut challenges = Vec::with_capacity(n_challenges);
             //for _ in 0..n_challenges {
             //    challenges.push(transcript.draw_challenge_ext());
             //}
 
             // MIX
-            t_primes.into_iter().flatten().collect()
+            t_primes.into_iter().flatten().collect() // TODO
         } else {
             t_primes.into_iter().flatten().collect()
         };
+
+        // Enter t_prime into the transcript.
+        transcript.observe_witnesses(
+            &t_prime
+                .iter()
+                .flat_map(|e| Into::<Vec<F>>::into(*e))
+                .collect::<Vec<F>>(),
+        );
 
         // Compute merkle proofs for n rows in the committed matrix. Extract columns to include
         // in the proof.
         // XXX figure out optimal n
         let row_size = (log_size * LC::BLOWUP) as usize;
         (
-            t_primes,
+            t_prime,
             (0..self.n_test_queries)
                 .map(|_| {
                     // Sample a random index for a given row.
@@ -141,22 +149,78 @@ where
         comm: &Self::Commitment,
         eval: Vec<E>,
         result: E,
-        proof: Self::Proof,
+        proof: &Self::Proof,
         transcript: &mut T,
     ) -> bool {
         let inner_expansion = tensor_product_expansion(&eval[..eval.len() / 2]);
         let outer_expansion = tensor_product_expansion(&eval[eval.len() / 2..]);
 
-        // push transcript?
+        // Enter t_prime into the transcript.
+        transcript.observe_witnesses(
+            &proof
+                .0
+                .iter()
+                .flat_map(|e| Into::<Vec<F>>::into(*e))
+                .collect::<Vec<F>>(),
+        );
 
-        // extract columns?
+        // Encode t_prime.
+        let enc_t_prime = LC::encode_ext(&proof.0);
 
-        // fft of t_prime
-        // let enc = LC::encode(&proof.0);
+        // Ensure that merkle paths and column evaluations are correct.
+        let log_size = proof.0.len();
+        let row_size = (log_size * LC::BLOWUP) as usize;
+        for i in 0..self.n_test_queries {
+            let index = transcript.draw_bits(row_size);
+            if !verify_val::<F, E>(&proof.1[i].1, &outer_expansion, enc_t_prime[index])
+                || !verify_path(&proof.1[i].0)
+            {
+                return false;
+            }
+        }
 
         // Ensure that t_prime times inner tensor expansion equals result.
-        false
+        inner_expansion
+            .iter()
+            .zip(proof.0.iter())
+            .fold(E::ZERO, |mut acc, (t, e)| {
+                let mut t = t.clone();
+                t.mul_assign(e);
+                acc.add_assign(&t);
+                acc
+            })
+            == result
     }
+}
+
+fn verify_val<F: Field, E: ChallengeField<F>>(columns: &[Vec<F>], tensor: &[E], eval: E) -> bool {
+    let evals = columns
+        .iter()
+        .map(|column| {
+            tensor
+                .iter()
+                .zip(column.iter())
+                .fold(E::ZERO, |mut acc, (t, e)| {
+                    let mut t = t.clone();
+                    t.mul_base(e);
+                    acc.add_assign(&t);
+                    acc
+                })
+        })
+        .collect::<Vec<E>>();
+
+    // Mix if we have multiple polys.
+    let final_eval = if evals.len() > 1 {
+        evals.iter().fold(E::ZERO, |mut acc, e| {
+            // MIX TODO
+            acc.add_assign(e);
+            acc
+        })
+    } else {
+        evals[0]
+    };
+
+    final_eval == eval
 }
 
 fn tensor_product_expansion<F: Field, E: ChallengeField<F>>(eval: &[E]) -> Vec<E> {
@@ -213,19 +277,19 @@ mod tests {
     }
 
     #[test]
-    fn commit_prove_single_poly() {
+    fn commit_prove_verify_single_poly() {
         let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
         evals.iter_mut().for_each(|e| {
             *e = M31(rand::thread_rng().gen_range(0..M31::ORDER));
         });
         let poly = MultilinearExtension::new(evals);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31>> {
+        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, M31_4>> {
             n_test_queries: 4,
             _f_marker: PhantomData::<M31>,
             _t_marker: PhantomData::<MockTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
-            _lc_marker: PhantomData::<ReedSolomonCode<M31>>,
+            _lc_marker: PhantomData::<ReedSolomonCode<M31, M31_4>>,
         };
         let commitment = pcs.commit(&[poly.clone()]);
 
@@ -233,6 +297,23 @@ mod tests {
         eval.iter_mut().for_each(|e| {
             *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
         });
-        let proof = pcs.prove(&commitment, &[poly], eval, &mut MockTranscript::default());
+        let proof = pcs.prove(
+            &commitment,
+            &[poly.clone()],
+            eval.clone(),
+            &mut MockTranscript::default(),
+        );
+
+        let mut res = poly.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res.fix_variable(*e);
+        });
+        assert!(pcs.verify(
+            &commitment,
+            eval,
+            res.evals[0],
+            &proof,
+            &mut MockTranscript::default()
+        ));
     }
 }

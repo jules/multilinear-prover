@@ -84,7 +84,7 @@ where
     }
 }
 
-pub fn verify_path(path: Vec<Vec<[u8; 32]>>) -> bool {
+pub fn verify_path(path: &[Vec<[u8; 32]>]) -> bool {
     for i in 0..(path.len() - 1) {
         let mut hasher = Blake2s256::new();
         path[i].iter().for_each(|e| hasher.update(e));

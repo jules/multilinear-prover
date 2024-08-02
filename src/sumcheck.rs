@@ -187,7 +187,7 @@ pub fn verify<
     }
 
     // Finally, check the committed polynomial at the list of challenges.
-    pcs.verify(&commitment, challenges, claimed_sum, proof, transcript)
+    pcs.verify(&commitment, challenges, claimed_sum, &proof, transcript)
 }
 
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
@@ -375,7 +375,7 @@ mod tests {
             comm: &Self::Commitment,
             eval: Vec<E>,
             result: E,
-            proof: Self::Proof,
+            proof: &Self::Proof,
             transcript: &mut T,
         ) -> bool {
             true

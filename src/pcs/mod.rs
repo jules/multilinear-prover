@@ -23,7 +23,7 @@ pub trait PolynomialCommitmentScheme<F: Field, T: Transcript<F>, E: ChallengeFie
         comm: &Self::Commitment,
         eval: Vec<E>,
         result: E,
-        proof: Self::Proof,
+        proof: &Self::Proof,
         transcript: &mut T,
     ) -> bool;
 }
