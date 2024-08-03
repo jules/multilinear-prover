@@ -8,6 +8,7 @@ use crate::{
 };
 use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
+use rayon::prelude::*;
 
 /// [DP23]: https://eprint.iacr.org/2023/630.pdf
 pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F, E>> {
@@ -35,7 +36,7 @@ where
             .iter()
             .map(|poly| {
                 poly.evals
-                    .chunks(log_size)
+                    .par_chunks(log_size)
                     .flat_map(|chunk| LC::encode(chunk))
                     .collect::<Vec<F>>()
             })
