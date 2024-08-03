@@ -19,6 +19,20 @@ pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: Linea
     _lc_marker: PhantomData<LC>,
 }
 
+impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F, E>>
+    TensorPCS<F, T, E, LC>
+{
+    pub fn new(n_test_queries: usize) -> Self {
+        Self {
+            n_test_queries,
+            _f_marker: PhantomData::<F>,
+            _t_marker: PhantomData::<T>,
+            _e_marker: PhantomData::<E>,
+            _lc_marker: PhantomData::<LC>,
+        }
+    }
+}
+
 impl<F: Field, LC: LinearCode<F, E>, T: Transcript<F>, E: ChallengeField<F>>
     PolynomialCommitmentScheme<F, T, E> for TensorPCS<F, T, E, LC>
 where

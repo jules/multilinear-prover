@@ -129,6 +129,9 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>, degree: usize) -> (Ve
     let evals = poly.sum_evaluations();
 
     // Extrapolate any extra `degree - 1` coefficients.
+    // Taking into account that any multivariate polynomial can be evaluated at a specific point by
+    // the equation (letting x be the point we want to check) p(x, X_1, ..., X_n) = (1 - x) * p(0,
+    // X_1, ..., X_n) + x * p(1, X_1, ..., X_n).
     let mut extended_evals = evals.clone();
     for i in 1..degree {
         let mut a = F::from_usize(i + 1);
@@ -141,7 +144,6 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>, degree: usize) -> (Ve
     }
 
     let mut coeffs = lagrange_interpolation(&extended_evals);
-
     (coeffs, evals)
 }
 
@@ -220,7 +222,11 @@ pub fn verify<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::field::m31::{quartic::M31_4, M31};
+    use crate::{
+        field::m31::{quartic::M31_4, M31},
+        linear_code::reed_solomon::ReedSolomonCode,
+        pcs::tensor_pcs::TensorPCS,
+    };
     use rand::Rng;
     use std::marker::PhantomData;
 
@@ -309,6 +315,34 @@ mod tests {
         ));
     }
 
+    fn tensor_pcs_sumcheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>])
+    where
+        [(); F::NUM_BYTES_IN_REPR]:,
+    {
+        let mut transcript = MockTranscript {
+            counter: 1,
+            _marker: PhantomData::<F>,
+        };
+
+        let tensor_pcs = TensorPCS::new(4);
+
+        let proof = prove::<_, E, _, _>(polys, &mut transcript, tensor_pcs);
+
+        let mut transcript = MockTranscript {
+            counter: 1,
+            _marker: PhantomData::<F>,
+        };
+
+        let tensor_pcs = TensorPCS::new(4);
+
+        assert!(verify::<
+            _,
+            E,
+            _,
+            TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>,
+        >(proof, &mut transcript, tensor_pcs));
+    }
+
     #[test]
     fn mock_pcs_single_poly_test() {
         let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
@@ -362,5 +396,15 @@ mod tests {
                 })
                 .collect::<Vec<MultilinearExtension<M31>>>(),
         );
+    }
+
+    #[test]
+    fn tensor_pcs_1_poly_test() {
+        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = MultilinearExtension::new(evals);
+        tensor_pcs_sumcheck::<M31, M31_4>(&[poly]);
     }
 }
