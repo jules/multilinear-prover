@@ -100,3 +100,17 @@ pub trait ChallengeField<F: Field>: Field + Into<Vec<F>> + From<F> {
     fn mul_base(&mut self, other: &F);
     fn real_coeff(&self) -> F;
 }
+
+pub trait TwoAdicField: Field {
+    /// The number of factors of two in this field's multiplicative group.
+    const TWO_ADICITY: usize;
+
+    /// Returns a generator of the multiplicative group of order `2^bits`.
+    /// Assumes `bits < TWO_ADICITY`, otherwise the result is undefined.
+    /// all functions here except for two_adic_generator should not even exist
+    #[must_use]
+    fn two_adic_generator() -> Self;
+
+    #[must_use]
+    fn two_adic_group_order() -> usize;
+}

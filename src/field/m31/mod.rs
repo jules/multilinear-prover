@@ -10,21 +10,15 @@ use core::{
 };
 
 /// The prime field `F_p` where `p = 2^31 - 1`.
-// NOTE: using a 64 bit register shouldn't affect performance on 64-bit processors (which is
-// where i assume most CPU provers will run) but should save us small extra costs incurred from
-// register truncation and expansion in for example multiplications.
-//
-// XXX: since we use such a large register, lazy reduction could be really viable but only for
-// additions/subtractions (does reduction still get to use the same hack in this case?)
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(transparent)]
-pub struct M31(pub u64);
+pub struct M31(pub u32);
 
 impl M31 {
-    pub const ORDER: u64 = (1 << 31) - 1;
-    pub const MSBITMASK: u64 = ((u32::MAX as u64) << 32) + (1 << 31);
+    pub const ORDER: u32 = (1 << 31) - 1;
+    pub const MSBITMASK: u32 = 1 << 31;
 
-    pub const fn new(value: u64) -> Self {
+    pub const fn new(value: u32) -> Self {
         debug_assert!(value < Self::ORDER);
         Self(value)
     }
@@ -58,15 +52,15 @@ impl M31 {
 
     #[inline(always)]
     pub fn from_negative_u64_with_reduction(x: u64) -> Self {
-        let x_low = x & Self::ORDER;
-        let x_high = (x >> 31) & Self::ORDER;
-        let x_sign = x >> 63;
+        let x_low = (x as u32) & Self::ORDER;
+        let x_high = ((x >> 31) as u32) & Self::ORDER;
+        let x_sign = (x >> 63) as u32;
         let res_wrapped = x_low.wrapping_add(x_high);
         let res_wrapped = res_wrapped - x_sign;
         let msb = res_wrapped & Self::MSBITMASK;
         let mut sum = res_wrapped;
         sum ^= msb;
-        let mut res = sum + (msb != 0) as u64;
+        let mut res = sum + u32::from(msb != 0);
         if res >= Self::ORDER {
             res -= Self::ORDER;
         }
@@ -86,7 +80,7 @@ impl Field for M31 {
 
     fn from_usize(value: usize) -> Self {
         let value = value as u64;
-        Self::from_negative_u64_with_reduction(value)
+        Self::from_u64_with_reduction(value)
     }
 
     #[inline(always)]
@@ -139,7 +133,7 @@ impl Field for M31 {
         // avoids branching but idk if this is really that efficient
         let of = sum >= Self::ORDER;
         let reduced = sum.wrapping_sub(Self::ORDER);
-        let mask = 0u64.wrapping_sub(of as u64);
+        let mask = 0u32.wrapping_sub(of as u32);
         self.0 = sum ^ (mask & (sum ^ reduced));
     }
 
@@ -147,15 +141,15 @@ impl Field for M31 {
         let mut res = self.0.wrapping_sub(other.0);
         let msb = res & Self::MSBITMASK;
         res ^= msb;
-        self.0 = res - (msb != 0) as u64
+        self.0 = res - (msb != 0) as u32
     }
 
     fn mul_assign(&mut self, other: &Self) {
-        let product = self.0 * other.0; // since we're using u64 no need to care about overflow or
-                                        // casting
-        *self = Self(product & Self::ORDER);
-        let product_high = Self(product >> 31);
-        self.add_assign(&product_high);
+        let product = u64::from(self.0) * u64::from(other.0);
+        let product_low = (product as u32) & ((1 << 31) - 1);
+        let product_high = (product >> 31) as u32;
+        *self = Self(product_low);
+        self.add_assign(&Self(product_high));
     }
 
     fn negate(&mut self) {
@@ -186,19 +180,20 @@ impl PrimeField for M31 {
     const TWO: Self = Self(2);
     const MINUS_ONE: Self = Self(Self::ORDER - 1);
     const CHAR_BITS: usize = 31;
-    const CHARACTERISTICS: u64 = Self::ORDER;
+    const CHARACTERISTICS: u64 = Self::ORDER as u64;
 
     #[inline(always)]
     fn as_u64(self) -> u64 {
-        self.0
+        self.0 as u64
     }
 
     #[inline(always)]
     fn from_u64_unchecked(value: u64) -> Self {
-        Self::new(value)
+        Self::new(value as u32)
     }
     #[inline(always)]
     fn from_u64(value: u64) -> Option<Self> {
+        let value = value as u32;
         if value >= Self::ORDER {
             None
         } else {
@@ -208,7 +203,7 @@ impl PrimeField for M31 {
 
     #[inline(always)]
     fn from_u64_with_reduction(value: u64) -> Self {
-        Self(value % Self::ORDER)
+        Self((value % (Self::ORDER as u64)) as u32)
     }
 
     #[inline(always)]
@@ -247,7 +242,7 @@ impl Display for M31 {
 }
 
 pub fn rand_fp_from_rng<R: rand::Rng>(rng: &mut R) -> M31 {
-    M31::from_u64_unchecked(rng.gen_range(0..M31::ORDER))
+    M31(rng.gen_range(0..M31::ORDER))
 }
 
 #[cfg(test)]

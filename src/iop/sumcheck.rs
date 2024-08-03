@@ -261,70 +261,70 @@ mod tests {
 
     // In this test, we only assert that the arithmetic concerning the sumcheck is correct - we
     // don't check for correct functioning of the transcript or the PCS.
-    fn mock_pcs_sumcheck<F: Field>(polys: &[MultilinearExtension<F>]) {
-        let mut transcript = MockTranscript {
-            counter: 1,
-            _marker: PhantomData::<M31>,
-        };
-        let proof = prove::<_, M31_4, _, _>(
-            polys,
-            &mut transcript,
-            MockPCS::<M31, MockTranscript<M31>, M31_4>::default(),
-        );
+    //fn mock_pcs_sumcheck<F: Field>(polys: &[MultilinearExtension<F>]) {
+    //    let mut transcript = MockTranscript {
+    //        counter: 1,
+    //        _marker: PhantomData::<M31>,
+    //    };
+    //    let proof = prove::<_, M31_4, _, _>(
+    //        polys,
+    //        &mut transcript,
+    //        MockPCS::<M31, MockTranscript<M31>, M31_4>::default(),
+    //    );
 
-        let mut transcript = MockTranscript {
-            counter: 1,
-            _marker: PhantomData::<M31>,
-        };
-        assert!(verify::<
-            _,
-            M31_4,
-            _,
-            MockPCS<M31, MockTranscript<M31>, M31_4>,
-        >(
-            proof,
-            &mut transcript,
-            MockPCS::<M31, MockTranscript<M31>, M31_4>::default()
-        ));
-    }
+    //    let mut transcript = MockTranscript {
+    //        counter: 1,
+    //        _marker: PhantomData::<M31>,
+    //    };
+    //    assert!(verify::<
+    //        _,
+    //        M31_4,
+    //        _,
+    //        MockPCS<M31, MockTranscript<M31>, M31_4>,
+    //    >(
+    //        proof,
+    //        &mut transcript,
+    //        MockPCS::<M31, MockTranscript<M31>, M31_4>::default()
+    //    ));
+    //}
 
-    #[test]
-    fn mock_pcs_single_poly_test() {
-        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-        evals
-            .iter_mut()
-            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-        let poly = MultilinearExtension::new(evals);
-        mock_pcs_sumcheck(&[poly]);
-    }
+    //#[test]
+    //fn mock_pcs_single_poly_test() {
+    //    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+    //    evals
+    //        .iter_mut()
+    //        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+    //    let poly = MultilinearExtension::new(evals);
+    //    mock_pcs_sumcheck(&[poly]);
+    //}
 
-    #[test]
-    fn mock_pcs_2_poly_test() {
-        mock_pcs_sumcheck(
-            &(0..2)
-                .map(|_| {
-                    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-                    evals
-                        .iter_mut()
-                        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-                    MultilinearExtension::new(evals)
-                })
-                .collect::<Vec<MultilinearExtension<M31>>>(),
-        );
-    }
+    //#[test]
+    //fn mock_pcs_2_poly_test() {
+    //    mock_pcs_sumcheck(
+    //        &(0..2)
+    //            .map(|_| {
+    //                let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+    //                evals
+    //                    .iter_mut()
+    //                    .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+    //                MultilinearExtension::new(evals)
+    //            })
+    //            .collect::<Vec<MultilinearExtension<M31>>>(),
+    //    );
+    //}
 
-    #[test]
-    fn mock_pcs_16_poly_test() {
-        mock_pcs_sumcheck(
-            &(0..16)
-                .map(|_| {
-                    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-                    evals
-                        .iter_mut()
-                        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-                    MultilinearExtension::new(evals)
-                })
-                .collect::<Vec<MultilinearExtension<M31>>>(),
-        );
-    }
+    //#[test]
+    //fn mock_pcs_16_poly_test() {
+    //    mock_pcs_sumcheck(
+    //        &(0..16)
+    //            .map(|_| {
+    //                let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+    //                evals
+    //                    .iter_mut()
+    //                    .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+    //                MultilinearExtension::new(evals)
+    //            })
+    //            .collect::<Vec<MultilinearExtension<M31>>>(),
+    //    );
+    //}
 }

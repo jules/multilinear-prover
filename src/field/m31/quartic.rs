@@ -8,6 +8,7 @@ use core::{
 // TODO this can be derived or done in a macro as we just have two degree-2 extensions in sequence.
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(C, align(16))]
 pub struct M31_4 {
     pub c0: M31_2,
     pub c1: M31_2,
@@ -27,7 +28,7 @@ impl Field for M31_4 {
     fn from_usize(v: usize) -> Self {
         Self {
             c0: M31_2 {
-                c0: M31::new(v as u64),
+                c0: M31::new(v as u32),
                 c1: M31::ZERO,
             },
             c1: M31_2::ZERO,
