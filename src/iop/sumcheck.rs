@@ -181,7 +181,6 @@ pub fn verify<
     let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
     res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
     if res != claimed_sum {
-        println!("very first");
         return false;
     }
 
@@ -200,7 +199,6 @@ pub fn verify<
         let mut res = univariate_eval(&coeffs, E::ZERO);
         res.add_assign(&univariate_eval(&coeffs, E::ONE));
         if res != claimed_sum {
-            println!("at {i}");
             return false;
         }
 
