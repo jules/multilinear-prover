@@ -24,10 +24,10 @@ pub struct SumcheckProof<
     res: E,
 }
 
-/// Runs the sumcheck prover. Given a polynomial and some abstracted transcript, we:
-/// - Iteratively perform sumcheck reduction steps, in which we evaluate the polynomial in all of
-/// its variables
-/// - Commit to the polynomial in full and produce an opening proof at the set of generated
+/// Runs the sumcheck prover. Given a list of polynomials and some abstracted transcript, we:
+/// - Iteratively perform sumcheck reduction steps, in which we evaluate the polynomials in all of
+/// their variables
+/// - Commit to the polynomials in full and produce an opening proof at the set of generated
 /// challenges
 ///
 /// Two different fields may be specified in case we want to use challenges from a field extension.
@@ -39,18 +39,30 @@ pub fn prove<
     T: Transcript<F>,
     PCS: PolynomialCommitmentScheme<F, T, E>,
 >(
-    poly: &MultilinearExtension<F>,
+    polys: &[MultilinearExtension<F>],
     transcript: &mut T,
     pcs: PCS,
 ) -> SumcheckProof<F, T, E, PCS> {
-    let n_rounds = poly.num_vars();
+    debug_assert!(polys.iter().all(|p| p.evals.len() == polys[0].evals.len()));
+
+    let n_rounds = polys[0].num_vars();
+    let degree = polys.len();
     let mut proofs = Vec::with_capacity(n_rounds);
     let mut challenges = Vec::with_capacity(n_rounds);
+
+    // Perform the polynomial product. This is just entrywise mult.
+    let mut poly = polys[0].clone();
+    for p in &polys[1..] {
+        poly.evals
+            .iter_mut()
+            .zip(p.evals.iter())
+            .for_each(|(eval, m)| eval.mul_assign(m));
+    }
 
     // In the first round we have no challenge to fix the polynomial with, and we also need to
     // collect the claimed sum from this step. This allows the verifier to reductively check all
     // other claimed sums from just a single field element.
-    let (coeffs, evals) = sumcheck_step(&poly);
+    let (coeffs, evals) = sumcheck_step(&poly, degree);
     let claimed_sum = evals.iter().fold(F::ZERO, |mut acc, x| {
         acc.add_assign(x);
         acc
@@ -73,7 +85,7 @@ pub fn prove<
     // For the remaining rounds, we always start by fixing the polynomial on a challenge
     // element, and then performing sumcheck steps accordingly.
     for i in 0..(n_rounds - 1) {
-        let (coeffs, _) = sumcheck_step(&poly_lifted);
+        let (coeffs, _) = sumcheck_step(&poly_lifted, degree);
         proofs.push(coeffs);
 
         transcript.observe_witnesses(
@@ -113,9 +125,23 @@ pub fn prove<
 // (where `d` is the degree of the multivariate polynomial), which are then interpolated into
 // monomial coefficients.
 #[inline(always)]
-fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>) -> (Vec<F>, Vec<F>) {
+fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>, degree: usize) -> (Vec<F>, Vec<F>) {
     let evals = poly.sum_evaluations();
-    let coeffs = lagrange_interpolation(&evals);
+
+    // Extrapolate any extra `degree - 1` coefficients.
+    let mut extended_evals = evals.clone();
+    for i in 1..degree {
+        let mut a = F::from_usize(i + 1);
+        let mut one_minus_a = F::ONE;
+        one_minus_a.sub_assign(&a);
+        a.mul_assign(&evals[1]);
+        one_minus_a.mul_assign(&evals[0]);
+        a.add_assign(&one_minus_a);
+        extended_evals.push(a);
+    }
+
+    let mut coeffs = lagrange_interpolation(&extended_evals);
+
     (coeffs, evals)
 }
 
@@ -155,6 +181,7 @@ pub fn verify<
     let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
     res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
     if res != claimed_sum {
+        println!("very first");
         return false;
     }
 
@@ -173,6 +200,7 @@ pub fn verify<
         let mut res = univariate_eval(&coeffs, E::ZERO);
         res.add_assign(&univariate_eval(&coeffs, E::ONE));
         if res != claimed_sum {
+            println!("at {i}");
             return false;
         }
 
@@ -261,70 +289,65 @@ mod tests {
 
     // In this test, we only assert that the arithmetic concerning the sumcheck is correct - we
     // don't check for correct functioning of the transcript or the PCS.
-    //fn mock_pcs_sumcheck<F: Field>(polys: &[MultilinearExtension<F>]) {
-    //    let mut transcript = MockTranscript {
-    //        counter: 1,
-    //        _marker: PhantomData::<M31>,
-    //    };
-    //    let proof = prove::<_, M31_4, _, _>(
-    //        polys,
-    //        &mut transcript,
-    //        MockPCS::<M31, MockTranscript<M31>, M31_4>::default(),
-    //    );
+    fn mock_pcs_sumcheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>]) {
+        let mut transcript = MockTranscript {
+            counter: 1,
+            _marker: PhantomData::<F>,
+        };
+        let proof = prove::<_, E, _, _>(
+            polys,
+            &mut transcript,
+            MockPCS::<F, MockTranscript<F>, E>::default(),
+        );
 
-    //    let mut transcript = MockTranscript {
-    //        counter: 1,
-    //        _marker: PhantomData::<M31>,
-    //    };
-    //    assert!(verify::<
-    //        _,
-    //        M31_4,
-    //        _,
-    //        MockPCS<M31, MockTranscript<M31>, M31_4>,
-    //    >(
-    //        proof,
-    //        &mut transcript,
-    //        MockPCS::<M31, MockTranscript<M31>, M31_4>::default()
-    //    ));
-    //}
+        let mut transcript = MockTranscript {
+            counter: 1,
+            _marker: PhantomData::<F>,
+        };
+        assert!(verify::<_, E, _, MockPCS<F, MockTranscript<F>, E>>(
+            proof,
+            &mut transcript,
+            MockPCS::<F, MockTranscript<F>, E>::default()
+        ));
+    }
 
-    //#[test]
-    //fn mock_pcs_single_poly_test() {
-    //    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-    //    evals
-    //        .iter_mut()
-    //        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-    //    let poly = MultilinearExtension::new(evals);
-    //    mock_pcs_sumcheck(&[poly]);
-    //}
+    #[test]
+    fn mock_pcs_single_poly_test() {
+        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+        evals
+            .iter_mut()
+            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+        let poly = MultilinearExtension::new(evals);
+        mock_pcs_sumcheck::<M31, M31_4>(&[poly]);
+    }
 
-    //#[test]
-    //fn mock_pcs_2_poly_test() {
-    //    mock_pcs_sumcheck(
-    //        &(0..2)
-    //            .map(|_| {
-    //                let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-    //                evals
-    //                    .iter_mut()
-    //                    .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-    //                MultilinearExtension::new(evals)
-    //            })
-    //            .collect::<Vec<MultilinearExtension<M31>>>(),
-    //    );
-    //}
+    #[test]
+    fn mock_pcs_2_poly_test() {
+        mock_pcs_sumcheck::<M31, M31_4>(
+            &(0..2)
+                .map(|_| {
+                    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+                    evals
+                        .iter_mut()
+                        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+                    MultilinearExtension::new(evals)
+                })
+                .collect::<Vec<MultilinearExtension<M31>>>(),
+        );
+    }
 
-    //#[test]
-    //fn mock_pcs_16_poly_test() {
-    //    mock_pcs_sumcheck(
-    //        &(0..16)
-    //            .map(|_| {
-    //                let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-    //                evals
-    //                    .iter_mut()
-    //                    .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-    //                MultilinearExtension::new(evals)
-    //            })
-    //            .collect::<Vec<MultilinearExtension<M31>>>(),
-    //    );
-    //}
+    #[test]
+    fn mock_pcs_16_poly_test() {
+        mock_pcs_sumcheck::<M31, M31_4>(
+            &(0..16)
+                .map(|_| {
+                    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+                    evals
+                        .iter_mut()
+                        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+                    MultilinearExtension::new(evals)
+                })
+                .collect::<Vec<MultilinearExtension<M31>>>(),
+        );
+    }
 }

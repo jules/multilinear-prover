@@ -8,14 +8,11 @@
 #![feature(raw_slice_split)]
 #![cfg_attr(target_arch = "aarch64", feature(stdarch_aarch64_prefetch))]
 
-mod fft;
 mod field;
 mod iop;
 mod linear_code;
 mod merkle_tree;
 mod mle;
 mod pcs;
-mod trace_holder;
 mod transcript;
 mod univariate_utils;
-mod worker;
