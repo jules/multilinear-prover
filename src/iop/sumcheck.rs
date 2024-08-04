@@ -282,7 +282,7 @@ mod tests {
         }
         fn draw_challenge_ext<E: ChallengeField<F>>(&mut self) -> E {
             self.counter += 1;
-            E::from(F::from_usize(self.counter))
+            E::new(vec![F::from_usize(self.counter); E::DEGREE])
         }
         fn draw_bits(&mut self, bits: usize) -> usize {
             0
