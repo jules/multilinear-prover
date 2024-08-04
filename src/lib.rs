@@ -14,5 +14,7 @@ mod linear_code;
 mod merkle_tree;
 mod mle;
 mod pcs;
+#[cfg(test)]
+mod tests;
 mod transcript;
 mod univariate_utils;

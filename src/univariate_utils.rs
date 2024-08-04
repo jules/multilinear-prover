@@ -80,7 +80,7 @@ pub fn univariate_eval_ext<F: Field, E: ChallengeField<F>>(coeffs: &[E], point: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::field::m31::{quartic::M31_4, M31};
+    use crate::field::m31::M31;
     use rand::Rng;
 
     #[test]

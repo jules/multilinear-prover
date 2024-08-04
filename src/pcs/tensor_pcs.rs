@@ -87,7 +87,7 @@ where
         &self,
         comm: &Self::Commitment,
         polys: &[MultilinearExtension<F>],
-        eval: Vec<E>,
+        eval: &[E],
         transcript: &mut T,
     ) -> Self::Proof {
         debug_assert!(eval.len() == polys[0].num_vars());
@@ -162,7 +162,7 @@ where
     fn verify(
         &self,
         comm: &Self::Commitment,
-        eval: Vec<E>,
+        eval: &[E],
         result: E,
         proof: &Self::Proof,
         transcript: &mut T,
@@ -316,7 +316,7 @@ mod tests {
         let proof = pcs.prove(
             &commitment,
             &[poly.clone()],
-            eval.clone(),
+            &eval,
             &mut MockTranscript::default(),
         );
 
@@ -326,7 +326,7 @@ mod tests {
         });
         assert!(pcs.verify(
             &commitment,
-            eval,
+            &eval,
             res.evals[0],
             &proof,
             &mut MockTranscript::default()

@@ -7,7 +7,4 @@ edition = "2021"
 [dependencies]
 blake2 = "0.10.6"
 rand = "0.8.5"
-unroll = "0.1"
 rayon = "1"
-seq-macro = "0.3.5"
-num_cpus = "1"

@@ -15,13 +15,13 @@ pub trait PolynomialCommitmentScheme<F: Field, T: Transcript<F>, E: ChallengeFie
         &self,
         comm: &Self::Commitment,
         polys: &[MultilinearExtension<F>],
-        eval: Vec<E>,
+        eval: &[E],
         transcript: &mut T,
     ) -> Self::Proof;
     fn verify(
         &self,
         comm: &Self::Commitment,
-        eval: Vec<E>,
+        eval: &[E],
         result: E,
         proof: &Self::Proof,
         transcript: &mut T,

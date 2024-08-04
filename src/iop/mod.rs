@@ -1,2 +1,2 @@
-mod sumcheck;
-mod zerocheck;
+pub mod sumcheck;
+pub mod zerocheck;
