@@ -190,6 +190,7 @@ where
             if !verify_val::<F, E>(&proof.1[i].1, &outer_expansion, enc_t_prime[index])
                 || !verify_path(&proof.1[i].0)
             {
+                println!("in the loop {i}");
                 return false;
             }
         }

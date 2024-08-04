@@ -407,4 +407,19 @@ mod tests {
         let poly = MultilinearExtension::new(evals);
         tensor_pcs_sumcheck::<M31, M31_4>(&[poly]);
     }
+
+    #[test]
+    fn tensor_pcs_64_poly_test() {
+        tensor_pcs_sumcheck::<M31, M31_4>(
+            &(0..64)
+                .map(|_| {
+                    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
+                    evals
+                        .iter_mut()
+                        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
+                    MultilinearExtension::new(evals)
+                })
+                .collect::<Vec<MultilinearExtension<M31>>>(),
+        );
+    }
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::univariate_utils::univariate_eval;
+use crate::univariate_utils::*;
 use core::marker::PhantomData;
 use std::alloc::Global;
 
@@ -21,8 +21,8 @@ impl<F: Field, E: ChallengeField<F>> LinearCode<F, E> for ReedSolomonCode<F, E> 
     }
 
     fn encode_ext(els: &[E]) -> Vec<E> {
-        let mut els = els.to_vec();
-        els.extend(els.clone());
-        els
+        (0..(els.len() * Self::BLOWUP))
+            .map(|i| univariate_eval_ext(els, F::from_usize(i)))
+            .collect::<Vec<E>>()
     }
 }
