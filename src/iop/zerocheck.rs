@@ -13,11 +13,6 @@ use core::marker::PhantomData;
 /// randomly zeroes out all points except for one - allowing us to check for a constraint
 /// polynomial being zero-everywhere on the cube without potential cheating by making all
 /// evaluations sum to zero, for instance.
-///
-/// Returns a [`ZerocheckProof`], which essentially is just a [`SumcheckProof`] without the claimed
-/// sum (as this can be inferred to be zero). Also returns the vector of evaluation points.
-// NOTE it's a bit tough to just rely on what we have here for randomness - maybe we should assume
-// that the commitment to the columns has already been pushed to the transcript.
 pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     polys: &[MultilinearExtension<F>],
     transcript: &mut T,
@@ -25,6 +20,15 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // Draw a list of challenges with which we create the `eq` polynomial.
     let mut c = vec![F::ZERO; polys[0].num_vars()];
     c.iter_mut().for_each(|e| *e = transcript.draw_challenge());
+    // For the purposes of creating `eq`, we will also create a vector of `1 - challenge`.
+    let one_minus_c = c
+        .iter()
+        .map(|chal| {
+            let mut one_minus_chal = F::ONE;
+            one_minus_chal.sub_assign(chal);
+            one_minus_chal
+        })
+        .collect::<Vec<F>>();
 
     // Create the `eq` polynomial. Depending on when a variable is 0 or 1, we either input (1 - r)
     // or r as the term for the multiplication. Do this for 2^num_vars.
@@ -33,9 +37,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
         *eval = c.iter().enumerate().fold(F::ZERO, |mut acc, (j, chal)| {
             let flip = ((i >> j) ^ 1) != 0;
             if flip {
-                let mut f = F::ONE;
-                f.sub_assign(&chal);
-                acc.mul_assign(&f);
+                acc.mul_assign(&one_minus_c[j]);
             } else {
                 acc.mul_assign(&chal);
             }
@@ -67,6 +69,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     sumcheck::prove(&[poly], transcript)
 }
 
+/// Runs the zerocheck verifier.
 pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     proof: SumcheckProof<F, E>,
     eval: Vec<E>,
