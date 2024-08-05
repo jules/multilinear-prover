@@ -17,8 +17,8 @@ pub enum SumcheckError {
 /// each variable and the initial claimed sum, which allows a verifier to reduce the initial claim
 /// to the final one and check it against (an oracle of) the proven polynomial.
 pub struct SumcheckProof<F: Field, E: ChallengeField<F>> {
-    proofs: Vec<Vec<E>>,
-    claimed_sum: F,
+    pub proofs: Vec<Vec<E>>,
+    pub claimed_sum: F,
 }
 
 /// Runs the sumcheck prover. Given a list of polynomials and some abstracted transcript, we
