@@ -11,7 +11,7 @@ use crate::field::{
     Field, TwoAdicField,
 };
 
-/// Precomputes an `order` sized multiplicative group of complex roots of unity, used for the
+/// Precomputes a 2^order_bits sized multiplicative group of complex roots of unity, used for the
 /// Circle FFT in M31.
 pub fn precompute_roots(order_bits: usize) -> Vec<M31_2> {
     let mut root = M31_2::two_adic_generator();
@@ -46,14 +46,14 @@ pub fn fft(coeffs: &[M31], roots: &[M31_2]) -> Vec<M31_2> {
 
     // Now we can perform our transformation.
     let twiddles = &roots[..roots.len() / 2];
-    panic!()
+    todo!()
 }
 
 /// Inverse Fast Fourier transform, which allows us to turn a set of polynomial coefficients (in
 /// the extension of M31) into a set of evaluations. The resulting vector will be in the base field
 /// of M31.
 pub fn ifft(coeffs: &[M31_2], roots: &[M31_2]) -> Vec<M31> {
-    panic!()
+    todo!()
 }
 
 #[cfg(test)]
@@ -63,8 +63,8 @@ mod tests {
 
     #[test]
     fn test_precompute_roots() {
-        // compute 2^10 roots.
-        let order = 10;
+        // compute 2^20 roots.
+        let order = 20;
         let roots = precompute_roots(order);
         assert!(roots.len() == 1 << order);
     }
