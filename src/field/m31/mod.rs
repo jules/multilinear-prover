@@ -138,10 +138,10 @@ impl Field for M31 {
     }
 
     fn sub_assign(&mut self, other: &Self) {
-        let mut res = self.0.wrapping_sub(other.0);
-        let msb = res & Self::MSBITMASK;
-        res ^= msb;
-        self.0 = res - (msb != 0) as u32
+        let mut sum = self.0.wrapping_sub(other.0);
+        let msb = sum & Self::MSBITMASK;
+        sum ^= msb;
+        self.0 = sum - u32::from(msb != 0);
     }
 
     fn mul_assign(&mut self, other: &Self) {

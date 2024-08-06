@@ -1,5 +1,5 @@
 use super::M31;
-use crate::field::{ChallengeField, Field, PrimeField, TwoAdicField};
+use crate::field::{ChallengeField, Field, TwoAdicField};
 use core::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
