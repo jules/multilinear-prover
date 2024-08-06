@@ -1,8 +1,6 @@
 use super::*;
 use crate::univariate_utils::*;
 use core::marker::PhantomData;
-use rayon::prelude::*;
-use std::alloc::Global;
 
 pub struct ReedSolomonCode<F: Field, E: ChallengeField<F>> {
     _f_marker: PhantomData<F>,
@@ -24,6 +22,8 @@ impl<F: Field, E: ChallengeField<F>> LinearCode<F, E> for ReedSolomonCode<F, E> 
     }
 
     // TODO how do we circle group fft with this - i assume we lift into the octal extension?
+    // in any case we can probably get away with a vandermonde here since this will be sqrt(n)
+    // sized
     fn encode_ext(els: &[E]) -> Vec<E> {
         (0..(els.len() * Self::BLOWUP))
             .map(|i| univariate_eval_ext(els, F::from_usize(i)))

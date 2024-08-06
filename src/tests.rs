@@ -9,32 +9,10 @@ mod tests {
         linear_code::reed_solomon::ReedSolomonCode,
         mle::MultilinearExtension,
         pcs::{tensor_pcs::TensorPCS, PolynomialCommitmentScheme},
+        test_utils::{rand_poly, MockTranscript},
         transcript::Transcript,
     };
-    use rand::Rng;
-    use std::marker::PhantomData;
-
-    #[derive(Default)]
-    pub struct MockTranscript<F: Field> {
-        counter: usize,
-        _marker: PhantomData<F>,
-    }
-
-    impl<F: Field> Transcript<F> for MockTranscript<F> {
-        fn draw_challenge(&mut self) -> F {
-            self.counter += 1;
-            F::from_usize(self.counter)
-        }
-        fn draw_challenge_ext<E: ChallengeField<F>>(&mut self) -> E {
-            self.counter += 1;
-            E::new(vec![F::from_usize(self.counter); E::DEGREE])
-        }
-        fn draw_bits(&mut self, bits: usize) -> usize {
-            0
-        }
-        fn observe_witness(&mut self, witness: F) {}
-        fn observe_witnesses(&mut self, witness: &[F]) {}
-    }
+    use core::marker::PhantomData;
 
     fn sumcheck_test<
         F: Field,
@@ -73,14 +51,8 @@ mod tests {
     {
         let tensor_pcs = TensorPCS::new(4);
 
-        let mut transcript_p = MockTranscript {
-            counter: 1,
-            _marker: PhantomData::<F>,
-        };
-        let mut transcript_v = MockTranscript {
-            counter: 1,
-            _marker: PhantomData::<F>,
-        };
+        let mut transcript_p = MockTranscript::default();
+        let mut transcript_v = MockTranscript::default();
 
         assert!(sumcheck_test::<
             _,
@@ -94,25 +66,14 @@ mod tests {
 
     #[test]
     fn tensor_pcs_1_poly_test() {
-        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-        evals
-            .iter_mut()
-            .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-        let poly = MultilinearExtension::new(evals);
-        tensor_pcs_sumcheck::<M31, M31_4>(&[poly]);
+        tensor_pcs_sumcheck::<M31, M31_4>(&[rand_poly(2u32.pow(20) as usize)]);
     }
 
     #[test]
     fn tensor_pcs_64_poly_test() {
         tensor_pcs_sumcheck::<M31, M31_4>(
             &(0..64)
-                .map(|_| {
-                    let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-                    evals
-                        .iter_mut()
-                        .for_each(|e| *e = M31(rand::thread_rng().gen_range(0..M31::ORDER)));
-                    MultilinearExtension::new(evals)
-                })
+                .map(|_| rand_poly(2u32.pow(20) as usize))
                 .collect::<Vec<MultilinearExtension<M31>>>(),
         );
     }

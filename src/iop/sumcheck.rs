@@ -3,7 +3,6 @@
 use crate::{
     field::{ChallengeField, Field},
     mle::MultilinearExtension,
-    pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
     univariate_utils::*,
 };

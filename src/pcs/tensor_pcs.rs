@@ -266,39 +266,14 @@ mod tests {
         },
         linear_code::reed_solomon::ReedSolomonCode,
         mle::MultilinearExtension,
+        test_utils::{rand_poly, MockTranscript},
         transcript::Transcript,
     };
     use rand::Rng;
 
-    #[derive(Default)]
-    pub struct MockTranscript<F: Field> {
-        counter: usize,
-        _marker: PhantomData<F>,
-    }
-
-    impl<F: Field> Transcript<F> for MockTranscript<F> {
-        fn draw_challenge(&mut self) -> F {
-            self.counter += 1;
-            F::from_usize(self.counter)
-        }
-        fn draw_challenge_ext<E: ChallengeField<F>>(&mut self) -> E {
-            self.counter += 1;
-            E::from(F::from_usize(self.counter))
-        }
-        fn draw_bits(&mut self, bits: usize) -> usize {
-            0
-        }
-        fn observe_witness(&mut self, witness: F) {}
-        fn observe_witnesses(&mut self, witness: &[F]) {}
-    }
-
     #[test]
     fn commit_prove_verify_single_poly() {
-        let mut evals = vec![M31::default(); 2u32.pow(20) as usize];
-        evals.iter_mut().for_each(|e| {
-            *e = M31(rand::thread_rng().gen_range(0..M31::ORDER));
-        });
-        let poly = MultilinearExtension::new(evals);
+        let poly = rand_poly(2u32.pow(20) as usize);
 
         let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, M31_4>> {
             n_test_queries: 4,

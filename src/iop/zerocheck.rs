@@ -6,7 +6,6 @@ use crate::{
     mle::MultilinearExtension,
     transcript::Transcript,
 };
-use core::marker::PhantomData;
 
 /// Runs the zerocheck prover. This is essentially just a sumcheck, but prior to running the
 /// sumcheck protocol, first multiplies the concerning polynomial with an `eq` polynomial which
