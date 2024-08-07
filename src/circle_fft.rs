@@ -56,9 +56,9 @@ pub fn precompute_roots(order_bits: usize) -> Vec<M31_2> {
     roots
 }
 
-/// Fast Fourier Transform, allowing us to interpret the coefficients as evaluations of a
-/// polynomial, and interpolating the polynomial in monomial basis. Due to usage of the circle
-/// group FFT, the resulting vector of coefficients resides in the complex extension of M31.
+/// Fast Fourier Transform, allowing us to interpret the coefficients of a polynomial, and
+/// evaluate the polynomial. Due to usage of the circle group FFT, the resulting vector of
+/// coefficients resides in the complex extension of M31.
 pub fn fft(coeffs: &[M31], roots: &[M31_2]) -> Vec<M31_2> {
     debug_assert!(roots.len() * 2 == coeffs.len());
 
@@ -70,11 +70,9 @@ pub fn fft(coeffs: &[M31], roots: &[M31_2]) -> Vec<M31_2> {
             c1: chunk[1],
         })
         .collect::<Vec<M31_2>>();
-    debug_assert!(compressed_coeffs.len() * 2 == coeffs.len());
 
     fft_inner(&mut compressed_coeffs, roots);
 
-    // NB postprocess?
     compressed_coeffs
 }
 
@@ -126,11 +124,11 @@ fn dit_layer(coeffs: &mut [M31_2], layer: usize, rev_layer: usize, twiddles: &[M
     }
 }
 
-/// Inverse Fast Fourier transform, which allows us to turn a set of polynomial coefficients (in
-/// the extension of M31) into a set of evaluations. The resulting vector will be in the base field
+/// Inverse Fast Fourier transform, which allows us to turn a set of polynomial evaluations (in
+/// the extension of M31) into a set of coefficients. The resulting vector will be in the base field
 /// of M31.
 pub fn ifft(coeffs: &[M31_2], roots: &[M31_2]) -> Vec<M31> {
-    let mut inverted_coeffs = coeffs.clone().to_vec();
+    let mut inverted_coeffs = coeffs.to_vec();
     fft_inner(&mut inverted_coeffs, roots);
 
     // Scale result
@@ -140,7 +138,10 @@ pub fn ifft(coeffs: &[M31_2], roots: &[M31_2]) -> Vec<M31> {
         .for_each(|coeff| coeff.mul_assign(&len_inv));
 
     // Postprocessing and unpacking.
-    bit_reverse(&mut inverted_coeffs);
+    let h = inverted_coeffs.len();
+    for i in 1..h / 2 {
+        inverted_coeffs.swap(i, h - i);
+    }
     inverted_coeffs
         .iter()
         .flat_map(|v| [v.c0, v.c1])
@@ -166,6 +167,15 @@ mod tests {
         let roots = precompute_roots(order);
         let poly = rand_poly::<M31>(2u32.pow(10) as usize);
         let result = ifft(&fft(&poly.evals, &roots), &roots);
+        assert!(
+            poly.evals.iter().fold(M31::ZERO, |mut acc, x| {
+                acc.add_assign(x);
+                acc
+            }) == result.iter().fold(M31::ZERO, |mut acc, x| {
+                acc.add_assign(x);
+                acc
+            })
+        );
         assert!(poly
             .evals
             .iter()
