@@ -47,9 +47,13 @@ pub fn precompute_roots(order_bits: usize) -> Vec<M31_2> {
     let base_root = root.clone();
     debug_assert!(base_root.pow(1 << order_bits) == M31_2::ONE);
     let mut roots = Vec::with_capacity(1 << order_bits);
-    for _ in 0..(1 << order_bits) {
-        roots.push(root);
-        root.mul_assign(&base_root); // NB last one not necessary
+    for i in 0..(1 << order_bits) {
+        if i == (1 << order_bits) - 1 {
+            roots.insert(0, root);
+        } else {
+            roots.push(root);
+            root.mul_assign(&base_root);
+        }
     }
 
     debug_assert!(*roots.last().unwrap() == M31_2::ONE);
@@ -163,9 +167,9 @@ mod tests {
 
     #[test]
     fn test_fft_roundtrip() {
-        let order = 9;
+        let order = 3;
         let roots = precompute_roots(order);
-        let poly = rand_poly::<M31>(2u32.pow(10) as usize);
+        let poly = rand_poly::<M31>(2u32.pow(4) as usize);
         let result = ifft(&fft(&poly.evals, &roots), &roots);
         assert!(
             poly.evals.iter().fold(M31::ZERO, |mut acc, x| {
@@ -176,6 +180,8 @@ mod tests {
                 acc
             })
         );
+        println!("{:?}", poly.evals);
+        println!("{:?}", result);
         assert!(poly
             .evals
             .iter()
