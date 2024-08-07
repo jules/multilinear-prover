@@ -1,3 +1,5 @@
+//! Tensor PCS from [DP23] https://eprint.iacr.org/2023/630.pdf.
+
 use crate::{
     field::{ChallengeField, Field},
     linear_code::LinearCode,
@@ -10,7 +12,6 @@ use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
 use rayon::prelude::*;
 
-/// [DP23]: https://eprint.iacr.org/2023/630.pdf
 pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F, E>> {
     n_test_queries: usize,
     _f_marker: PhantomData<F>,
@@ -41,7 +42,7 @@ where
     type Commitment = (MerkleTree<F>, Vec<Vec<F>>);
     type Proof = (Vec<E>, Vec<(Vec<Vec<[u8; 32]>>, Vec<Vec<F>>)>);
 
-    fn commit(&self, polys: &[MultilinearExtension<F>]) -> Self::Commitment {
+    fn commit(&self, polys: &[MultilinearExtension<F>], _transcript: &mut T) -> Self::Commitment {
         debug_assert!(polys.iter().all(|p| p.evals.len() == polys[0].evals.len()));
 
         // Turn the polys into m x m matrices row-wise, then encode row-wise.
@@ -282,7 +283,7 @@ mod tests {
             _e_marker: PhantomData::<M31_4>,
             _lc_marker: PhantomData::<ReedSolomonCode<M31, M31_4>>,
         };
-        let commitment = pcs.commit(&[poly.clone()]);
+        let commitment = pcs.commit(&[poly.clone()], &mut MockTranscript::default());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {

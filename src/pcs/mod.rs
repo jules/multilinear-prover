@@ -11,7 +11,7 @@ pub trait PolynomialCommitmentScheme<F: Field, T: Transcript<F>, E: ChallengeFie
     type Commitment;
     type Proof;
 
-    fn commit(&self, polys: &[MultilinearExtension<F>]) -> Self::Commitment;
+    fn commit(&self, polys: &[MultilinearExtension<F>], transcript: &mut T) -> Self::Commitment;
     fn prove(
         &self,
         comm: &Self::Commitment,

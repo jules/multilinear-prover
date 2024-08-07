@@ -34,7 +34,7 @@ mod tests {
                 .zip(p.evals.iter())
                 .for_each(|(eval, m)| eval.mul_assign(m));
         }
-        let commitment = pcs.commit(&[poly.clone()]);
+        let commitment = pcs.commit(&[poly.clone()], transcript_p);
         let proof = pcs.prove(&commitment, &[poly], &eval_point, transcript_p);
 
         // Verifier work
