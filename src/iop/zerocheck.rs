@@ -15,7 +15,7 @@ use crate::{
 pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     polys: &[MultilinearExtension<F>],
     transcript: &mut T,
-) -> (SumcheckProof<F, E>, Vec<E>) {
+) -> (SumcheckProof<F, E>, Vec<E>, Vec<MultilinearExtension<F>>) {
     // Draw a list of challenges with which we create the `eq` polynomial.
     let mut c = vec![F::ZERO; polys[0].num_vars()];
     c.iter_mut().for_each(|e| *e = transcript.draw_challenge());
@@ -49,7 +49,8 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     polys.push(MultilinearExtension::new(eq_evals));
 
     // Finally, just run the sumcheck prover and return the needed information.
-    sumcheck::prove(&polys, transcript)
+    let (proof, evals) = sumcheck::prove(&polys, transcript);
+    (proof, evals, polys)
 }
 
 /// Runs the zerocheck verifier.

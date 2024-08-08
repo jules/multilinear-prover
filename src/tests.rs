@@ -26,9 +26,10 @@ mod tests {
         pcs: PCS,
     ) -> bool {
         // Prover work
-        let (sumcheck_claim, eval_point) = zerocheck::prove(polys, transcript_p);
-        let mut poly = polys[0].clone();
-        for p in &polys[1..] {
+        let (sumcheck_claim, eval_point, polys_with_f_hat) = zerocheck::prove(polys, transcript_p);
+
+        let mut poly = polys_with_f_hat[0].clone();
+        for p in &polys_with_f_hat[1..] {
             poly.evals
                 .iter_mut()
                 .zip(p.evals.iter())
@@ -76,6 +77,25 @@ mod tests {
         }
     }
 
+    fn tensor_pcs_zerocheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>])
+    where
+        [(); F::NUM_BYTES_IN_REPR]:,
+    {
+        let tensor_pcs = TensorPCS::new(4);
+
+        let mut transcript_p = MockTranscript::default();
+        let mut transcript_v = MockTranscript::default();
+
+        assert!(zerocheck_test::<
+            _,
+            E,
+            _,
+            TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>,
+        >(
+            polys, &mut transcript_p, &mut transcript_v, tensor_pcs
+        ));
+    }
+
     fn tensor_pcs_sumcheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>])
     where
         [(); F::NUM_BYTES_IN_REPR]:,
@@ -103,6 +123,20 @@ mod tests {
     #[test]
     fn tensor_pcs_64_poly_test() {
         tensor_pcs_sumcheck::<M31, M31_4>(
+            &(0..64)
+                .map(|_| rand_poly(2u32.pow(20) as usize))
+                .collect::<Vec<MultilinearExtension<M31>>>(),
+        );
+    }
+
+    #[test]
+    fn tensor_pcs_1_poly_test_zerocheck() {
+        tensor_pcs_zerocheck::<M31, M31_4>(&[rand_poly(2u32.pow(20) as usize)]);
+    }
+
+    #[test]
+    fn tensor_pcs_64_poly_test_zerocheck() {
+        tensor_pcs_zerocheck::<M31, M31_4>(
             &(0..64)
                 .map(|_| rand_poly(2u32.pow(20) as usize))
                 .collect::<Vec<MultilinearExtension<M31>>>(),
