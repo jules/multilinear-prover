@@ -1,5 +1,5 @@
 use super::*;
-use crate::univariate_utils::*;
+use crate::{circle_fft::*, univariate_utils::*};
 use core::marker::PhantomData;
 
 pub struct ReedSolomonCode<F: Field, E: ChallengeField<F>> {

@@ -13,8 +13,8 @@ mod field;
 mod iop;
 mod linear_code;
 mod merkle_tree;
-mod mle;
 mod pcs;
+mod polynomial;
 #[cfg(test)]
 mod test_utils;
 #[cfg(test)]

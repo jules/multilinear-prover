@@ -3,7 +3,7 @@ pub mod tensor_pcs;
 
 use crate::{
     field::{ChallengeField, Field},
-    mle::MultilinearExtension,
+    polynomial::mle::MultilinearExtension,
     transcript::Transcript,
 };
 

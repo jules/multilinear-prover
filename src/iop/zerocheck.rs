@@ -3,7 +3,7 @@
 use super::sumcheck::{self, SumcheckError, SumcheckProof};
 use crate::{
     field::{ChallengeField, Field},
-    mle::MultilinearExtension,
+    polynomial::MultilinearExtension,
     transcript::Transcript,
 };
 
@@ -44,57 +44,23 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
         });
     });
 
-    // Perform the polynomial product. This is just entrywise mult.
-    // XXX i think this is something that the sumcheck prover actually shouldn't do, and instead we
-    // should send some abstraction like a 'CompositionPolynomial' which contains degree
-    // information.
-    let mut poly = polys[0].clone();
-    for p in &polys[1..] {
-        poly.evals
-            .iter_mut()
-            .zip(p.evals.iter())
-            .for_each(|(eval, m)| eval.mul_assign(m));
-    }
-
-    // Now multiply with our constraint poly.
-    poly.evals
-        .iter_mut()
-        .zip(eq_evals.iter())
-        .for_each(|(eval, eq)| {
-            eval.mul_assign(eq);
-        });
+    // Push this to our set of polynomials
+    let mut polys = polys.to_vec();
+    polys.push(MultilinearExtension::new(eq_evals));
 
     // Finally, just run the sumcheck prover and return the needed information.
-    sumcheck::prove(&[poly], transcript)
+    sumcheck::prove(&polys, transcript)
 }
 
 /// Runs the zerocheck verifier.
 pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     proof: SumcheckProof<F, E>,
-    eval: Vec<E>,
     transcript: &mut T,
 ) -> Result<E, SumcheckError> {
     // Draw a list of challenges with which we create the `eq` polynomial.
-    let mut c = vec![F::ZERO; eval.len()];
+    let mut c = vec![F::ZERO; proof.proofs.len()];
     c.iter_mut().for_each(|e| *e = transcript.draw_challenge());
 
-    // Get a claimed sum for this proof.
-    let mut claim = sumcheck::verify(proof, transcript)?;
-
-    // Evaluate `eq` at `eval`.
-    let mut res = E::ONE;
-    c.iter().zip(eval.iter()).for_each(|(c, e)| {
-        let mut ce = e.clone();
-        ce.mul_base(c);
-        ce.add_assign(&ce.clone());
-        ce.sub_base(c);
-        ce.sub_assign(e);
-        ce.add_assign(&E::ONE);
-        res.mul_assign(&ce);
-    });
-
-    // Output claim / res
-    let res_inverse = res.inverse().expect("res should have an inverse");
-    claim.mul_assign(&res_inverse);
-    Ok(claim)
+    // Return a claimed sum for this proof.
+    sumcheck::verify(proof, transcript)
 }

@@ -5,14 +5,45 @@ mod tests {
             m31::{quartic::M31_4, M31},
             ChallengeField, Field,
         },
-        iop::sumcheck,
+        iop::{sumcheck, zerocheck},
         linear_code::reed_solomon::ReedSolomonCode,
-        mle::MultilinearExtension,
         pcs::{tensor_pcs::TensorPCS, PolynomialCommitmentScheme},
+        polynomial::{MultilinearExtension, VirtualPolynomial},
         test_utils::{rand_poly, MockTranscript},
         transcript::Transcript,
     };
     use core::marker::PhantomData;
+
+    fn zerocheck_test<
+        F: Field,
+        E: ChallengeField<F>,
+        T: Transcript<F>,
+        PCS: PolynomialCommitmentScheme<F, T, E>,
+    >(
+        polys: &[MultilinearExtension<F>],
+        transcript_p: &mut T,
+        transcript_v: &mut T,
+        pcs: PCS,
+    ) -> bool {
+        // Prover work
+        let (sumcheck_claim, eval_point) = zerocheck::prove(polys, transcript_p);
+        let mut poly = polys[0].clone();
+        for p in &polys[1..] {
+            poly.evals
+                .iter_mut()
+                .zip(p.evals.iter())
+                .for_each(|(eval, m)| eval.mul_assign(m));
+        }
+        let commitment = pcs.commit(&[poly.clone()], transcript_p);
+        let proof = pcs.prove(&commitment, &[poly], &eval_point, transcript_p);
+
+        // Verifier work
+        if let Ok(final_claim) = zerocheck::verify(sumcheck_claim, transcript_v) {
+            pcs.verify(&commitment, &eval_point, final_claim, &proof, transcript_v)
+        } else {
+            false
+        }
+    }
 
     fn sumcheck_test<
         F: Field,

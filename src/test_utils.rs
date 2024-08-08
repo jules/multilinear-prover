@@ -1,6 +1,6 @@
 use crate::{
     field::{ChallengeField, Field},
-    mle::MultilinearExtension,
+    polynomial::mle::MultilinearExtension,
     transcript::Transcript,
 };
 use core::marker::PhantomData;

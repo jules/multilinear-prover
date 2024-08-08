@@ -4,7 +4,7 @@ use crate::{
     field::{ChallengeField, Field},
     linear_code::LinearCode,
     merkle_tree::{verify_path, MerkleTree},
-    mle::MultilinearExtension,
+    polynomial::mle::MultilinearExtension,
     pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
 };
@@ -266,7 +266,7 @@ mod tests {
             Field,
         },
         linear_code::reed_solomon::ReedSolomonCode,
-        mle::MultilinearExtension,
+        polynomial::mle::MultilinearExtension,
         test_utils::{rand_poly, MockTranscript},
         transcript::Transcript,
     };

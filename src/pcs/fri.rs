@@ -5,7 +5,7 @@ use crate::{
     field::{ChallengeField, Field},
     linear_code::LinearCode,
     merkle_tree::MerkleTree,
-    mle::MultilinearExtension,
+    polynomial::mle::MultilinearExtension,
     transcript::Transcript,
 };
 use core::marker::PhantomData;
