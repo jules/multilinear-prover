@@ -33,7 +33,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // or r as the term for the multiplication. Do this for 2^num_vars.
     let mut eq_evals = vec![F::ZERO; polys[0].evals.len()];
     eq_evals.iter_mut().enumerate().for_each(|(i, eval)| {
-        *eval = c.iter().enumerate().fold(F::ZERO, |mut acc, (j, chal)| {
+        *eval = c.iter().enumerate().fold(F::ONE, |mut acc, (j, chal)| {
             let flip = ((i >> j) ^ 1) != 0;
             if flip {
                 acc.mul_assign(&one_minus_c[j]);

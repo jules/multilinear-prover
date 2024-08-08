@@ -35,11 +35,15 @@ mod tests {
                 .zip(p.evals.iter())
                 .for_each(|(eval, m)| eval.mul_assign(m));
         }
+        println!("{:?}", poly.evals);
         let commitment = pcs.commit(&[poly.clone()], transcript_p);
         let proof = pcs.prove(&commitment, &[poly], &eval_point, transcript_p);
 
         // Verifier work
         if let Ok(final_claim) = zerocheck::verify(sumcheck_claim, transcript_v) {
+            if final_claim != E::ZERO {
+                return false;
+            }
             pcs.verify(&commitment, &eval_point, final_claim, &proof, transcript_v)
         } else {
             false
@@ -77,7 +81,9 @@ mod tests {
         }
     }
 
-    fn tensor_pcs_zerocheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>])
+    fn tensor_pcs_zerocheck<F: Field, E: ChallengeField<F>>(
+        polys: &[MultilinearExtension<F>],
+    ) -> bool
     where
         [(); F::NUM_BYTES_IN_REPR]:,
     {
@@ -86,14 +92,12 @@ mod tests {
         let mut transcript_p = MockTranscript::default();
         let mut transcript_v = MockTranscript::default();
 
-        assert!(zerocheck_test::<
-            _,
-            E,
-            _,
-            TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>,
-        >(
-            polys, &mut transcript_p, &mut transcript_v, tensor_pcs
-        ));
+        zerocheck_test::<_, E, _, TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>>(
+            polys,
+            &mut transcript_p,
+            &mut transcript_v,
+            tensor_pcs,
+        )
     }
 
     fn tensor_pcs_sumcheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>])
@@ -130,16 +134,40 @@ mod tests {
     }
 
     #[test]
+    fn tensor_pcs_1_poly_test_zerocheck_fail() {
+        assert!(!tensor_pcs_zerocheck::<M31, M31_4>(&[rand_poly(
+            2u32.pow(4) as usize
+        )]));
+    }
+
+    #[test]
+    fn tensor_pcs_64_poly_test_zerocheck_fail() {
+        assert!(!tensor_pcs_zerocheck::<M31, M31_4>(
+            &(0..64)
+                .map(|_| rand_poly(2u32.pow(4) as usize))
+                .collect::<Vec<MultilinearExtension<M31>>>(),
+        ));
+    }
+
+    #[test]
     fn tensor_pcs_1_poly_test_zerocheck() {
-        tensor_pcs_zerocheck::<M31, M31_4>(&[rand_poly(2u32.pow(20) as usize)]);
+        assert!(tensor_pcs_zerocheck::<M31, M31_4>(&[
+            MultilinearExtension::new(vec![M31::ZERO; 2u32.pow(4) as usize])
+        ]));
     }
 
     #[test]
     fn tensor_pcs_64_poly_test_zerocheck() {
-        tensor_pcs_zerocheck::<M31, M31_4>(
-            &(0..64)
-                .map(|_| rand_poly(2u32.pow(20) as usize))
-                .collect::<Vec<MultilinearExtension<M31>>>(),
-        );
+        // Because we currently stand-in the constraint poly for a entrywise mult between all polys, we
+        // can create a successful zerocheck by inputting one zero polynomial.
+        let mut polys = (0..64)
+            .map(|_| rand_poly(2u32.pow(4) as usize))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        polys.push(MultilinearExtension::new(vec![
+            M31::ZERO;
+            2u32.pow(4) as usize
+        ]));
+
+        assert!(tensor_pcs_zerocheck::<M31, M31_4>(&polys));
     }
 }
