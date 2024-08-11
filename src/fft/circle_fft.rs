@@ -133,7 +133,7 @@ pub fn postprocess(coeffs: &[M31_2]) -> Vec<M31> {
 /// evaluate the polynomial. Due to usage of the circle group FFT, the resulting vector of
 /// coefficients resides in the complex extension of M31.
 pub fn fft(coeffs: &mut [M31_2], roots: &[M31_2]) {
-    debug_assert!(roots.len() == coeffs.len());
+    debug_assert!(roots.len() >= coeffs.len());
     let twiddles = &roots[..roots.len() / 2];
     let log_len = coeffs.len().ilog2() as usize;
     bit_reverse(coeffs);
