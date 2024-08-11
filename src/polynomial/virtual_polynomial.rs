@@ -12,6 +12,22 @@ impl<F: Field> VirtualPolynomial<F> {
     pub fn new(evals: Vec<F>, constituents: Vec<MultilinearExtension<F>>) -> Self {
         todo!()
     }
+
+    pub fn add_assign(&mut self, other: &Self) {
+        todo!()
+    }
+
+    pub fn mul_assign(&mut self, other: &Self) {
+        todo!()
+    }
+
+    pub fn add_assign_mle(&mut self, other: &MultilinearExtension<F>) {
+        todo!()
+    }
+
+    pub fn mul_assign_mle(&mut self, other: &MultilinearExtension<F>) {
+        todo!()
+    }
 }
 
 impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
@@ -20,8 +36,14 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
         self.evals.len()
     }
 
+    #[inline(always)]
     fn degree(&self) -> usize {
         self.degree
+    }
+
+    #[inline(always)]
+    fn evals(&self) -> &[F] {
+        &self.evals
     }
 
     #[inline(always)]
@@ -39,6 +61,7 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
         self.evals.truncate(new_len);
     }
 
+    #[inline(always)]
     fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> VirtualPolynomial<E> {
         VirtualPolynomial::<E> {
             degree: self.degree,
@@ -46,12 +69,10 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
             evals: self.fix_variable_ext_internal(point),
         }
     }
+}
 
-    fn add(&self, other: impl MultivariatePolynomial<F>) -> VirtualPolynomial<F> {
-        todo!()
-    }
-
-    fn mul(&self, other: impl MultivariatePolynomial<F>) -> VirtualPolynomial<F> {
-        todo!()
+impl<F: Field> From<MultilinearExtension<F>> for VirtualPolynomial<F> {
+    fn from(value: MultilinearExtension<F>) -> Self {
+        Self::new(value.evals.clone(), vec![value])
     }
 }

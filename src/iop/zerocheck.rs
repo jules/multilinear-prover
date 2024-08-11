@@ -3,7 +3,7 @@
 use super::sumcheck::{self, SumcheckError, SumcheckProof};
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::{MultilinearExtension, MultivariatePolynomial},
+    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
 };
 
@@ -12,10 +12,10 @@ use crate::{
 /// randomly zeroes out all points except for one - allowing us to check for a constraint
 /// polynomial being zero-everywhere on the cube without potential cheating by making all
 /// evaluations sum to zero, for instance.
-pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>, MV: MultivariatePolynomial<F>>(
-    poly: &MV,
+pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
+    poly: &mut VirtualPolynomial<F>,
     transcript: &mut T,
-) -> (SumcheckProof<F, E>, Vec<E>, Vec<F>) {
+) -> (SumcheckProof<F, E>, Vec<E>) {
     // Draw a list of challenges with which we create the `eq` polynomial.
     let mut c = vec![F::ZERO; poly.num_vars()];
     c.iter_mut().for_each(|e| *e = transcript.draw_challenge());
@@ -46,11 +46,11 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>, MV: MultivariateP
     });
 
     // Multiply with our polynomial.
-    let poly = poly.mul(MultilinearExtension::new(eq_evals.clone()));
+    poly.mul_assign_mle(&MultilinearExtension::new(eq_evals.clone()));
 
     // Finally, just run the sumcheck prover and return the needed information.
     let (proof, evals) = sumcheck::prove(&poly, transcript);
-    (proof, evals, eq_evals)
+    (proof, evals)
 }
 
 /// Runs the zerocheck verifier.

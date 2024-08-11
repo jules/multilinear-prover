@@ -5,7 +5,7 @@ use crate::{
     linear_code::LinearCode,
     merkle_tree::{verify_path, MerkleTree},
     pcs::PolynomialCommitmentScheme,
-    polynomial::{MultilinearExtension, MultivariatePolynomial},
+    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
 };
 use blake2::{Blake2s256, Digest};
@@ -42,15 +42,15 @@ where
     type Commitment = (MerkleTree<F>, Vec<Vec<F>>);
     type Proof = (Vec<E>, Vec<(Vec<Vec<[u8; 32]>>, Vec<Vec<F>>)>);
 
-    fn commit(&self, polys: &[MultilinearExtension<F>], _transcript: &mut T) -> Self::Commitment {
-        debug_assert!(polys.iter().all(|p| p.evals.len() == polys[0].evals.len()));
+    fn commit(&self, polys: &[VirtualPolynomial<F>], _transcript: &mut T) -> Self::Commitment {
+        debug_assert!(polys.iter().all(|p| p.len() == polys[0].len()));
 
         // Turn the polys into m x m matrices row-wise, then encode row-wise.
-        let log_size = polys[0].evals.len().isqrt();
+        let log_size = polys[0].len().isqrt();
         let matrices = polys
             .iter()
             .map(|poly| {
-                poly.evals
+                poly.evals()
                     .par_chunks(log_size)
                     .flat_map(|chunk| LC::encode(chunk))
                     .collect::<Vec<F>>()
@@ -87,7 +87,7 @@ where
     fn prove(
         &self,
         comm: &Self::Commitment,
-        polys: &[MultilinearExtension<F>],
+        polys: &[VirtualPolynomial<F>],
         eval: &[E],
         transcript: &mut T,
     ) -> Self::Proof {
@@ -99,13 +99,13 @@ where
         let outer_expansion = tensor_product_expansion(&eval[eval.len() / 2..]);
 
         // Calculate the t' for each t (poly) with the vector-matrix product.
-        let log_size = polys[0].evals.len().isqrt();
+        let log_size = polys[0].len().isqrt();
         let mut t_primes = vec![vec![E::ZERO; log_size]; polys.len()];
         t_primes.iter_mut().enumerate().for_each(|(i, t_prime)| {
             outer_expansion.iter().enumerate().for_each(|(j, tensor)| {
                 t_prime.iter_mut().enumerate().for_each(|(k, entry)| {
                     let mut tensor = tensor.clone();
-                    tensor.mul_base(&polys[i].evals[j * log_size + k]);
+                    tensor.mul_base(&polys[i].eval(j * log_size + k));
                     entry.add_assign(&tensor);
                 });
             });
@@ -282,7 +282,7 @@ mod tests {
             _e_marker: PhantomData::<M31_4>,
             _lc_marker: PhantomData::<ReedSolomonCode<M31, M31_4>>,
         };
-        let commitment = pcs.commit(&[poly.clone()], &mut MockTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -290,7 +290,7 @@ mod tests {
         });
         let proof = pcs.prove(
             &commitment,
-            &[poly.clone()],
+            &[poly.clone().into()],
             &eval,
             &mut MockTranscript::default(),
         );

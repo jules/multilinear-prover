@@ -6,6 +6,7 @@ pub use virtual_polynomial::*;
 use crate::field::{ChallengeField, Field};
 use core::fmt::Debug;
 
+/// Mainly takes care of the DRY principle for common functionality in polynomial types.
 pub trait MultivariatePolynomial<F: Field>: Clone + Debug {
     fn len(&self) -> usize;
 
@@ -19,6 +20,9 @@ pub trait MultivariatePolynomial<F: Field>: Clone + Debug {
     fn degree(&self) -> usize {
         1
     }
+
+    /// Returns a reference to the underlying evaluations.
+    fn evals(&self) -> &[F];
 
     /// Returns an evaluation on the hypercube.
     fn eval(&self, index: usize) -> F;
@@ -75,7 +79,4 @@ pub trait MultivariatePolynomial<F: Field>: Clone + Debug {
 
         (evals_0, evals_1)
     }
-
-    fn add(&self, other: impl MultivariatePolynomial<F>) -> impl MultivariatePolynomial<F>;
-    fn mul(&self, other: impl MultivariatePolynomial<F>) -> impl MultivariatePolynomial<F>;
 }

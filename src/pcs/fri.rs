@@ -25,7 +25,7 @@ where
     type Commitment = usize; // TODO
     type Proof = usize; // TODO
 
-    fn commit(&self, polys: &[MultilinearExtension<F>], transcript: &mut T) -> Self::Commitment {
+    fn commit(&self, polys: &[VirtualPolynomial<F>], transcript: &mut T) -> Self::Commitment {
         //let mut codewords = vec![];
 
         // Create codeword
@@ -37,7 +37,7 @@ where
     fn prove(
         &self,
         comm: &Self::Commitment,
-        polys: &[MultilinearExtension<F>],
+        polys: &[VirtualPolynomial<F>],
         eval: &[E],
         transcript: &mut T,
     ) -> Self::Proof {

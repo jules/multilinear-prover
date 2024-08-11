@@ -8,7 +8,7 @@ mod tests {
         iop::{sumcheck, zerocheck},
         linear_code::reed_solomon::ReedSolomonCode,
         pcs::{tensor_pcs::TensorPCS, PolynomialCommitmentScheme},
-        polynomial::{MultilinearExtension, VirtualPolynomial},
+        polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
         test_utils::{rand_poly, MockTranscript},
         transcript::Transcript,
     };
@@ -20,23 +20,16 @@ mod tests {
         T: Transcript<F>,
         PCS: PolynomialCommitmentScheme<F, T, E>,
     >(
-        polys: &[MultilinearExtension<F>],
+        poly: &mut VirtualPolynomial<F>,
         transcript_p: &mut T,
         transcript_v: &mut T,
         pcs: PCS,
     ) -> bool {
         // Prover work
-        let (sumcheck_claim, eval_point, eq_evals) = zerocheck::prove(polys, transcript_p);
+        let (sumcheck_claim, eval_point) = zerocheck::prove(poly, transcript_p);
 
-        let mut poly = polys_with_f_hat[0].clone();
-        for p in &polys_with_f_hat[1..] {
-            poly.evals
-                .iter_mut()
-                .zip(p.evals.iter())
-                .for_each(|(eval, m)| eval.mul_assign(m));
-        }
         let commitment = pcs.commit(&[poly.clone()], transcript_p);
-        let proof = pcs.prove(&commitment, &[poly], &eval_point, transcript_p);
+        let proof = pcs.prove(&commitment, &[poly.clone()], &eval_point, transcript_p);
 
         // Verifier work
         if let Ok(final_claim) = zerocheck::verify(sumcheck_claim, transcript_v) {
@@ -55,22 +48,15 @@ mod tests {
         T: Transcript<F>,
         PCS: PolynomialCommitmentScheme<F, T, E>,
     >(
-        polys: &[MultilinearExtension<F>],
+        poly: &VirtualPolynomial<F>,
         transcript_p: &mut T,
         transcript_v: &mut T,
         pcs: PCS,
     ) -> bool {
         // Prover work
-        let (sumcheck_claim, eval_point) = sumcheck::prove(polys, transcript_p);
-        let mut poly = polys[0].clone();
-        for p in &polys[1..] {
-            poly.evals
-                .iter_mut()
-                .zip(p.evals.iter())
-                .for_each(|(eval, m)| eval.mul_assign(m));
-        }
+        let (sumcheck_claim, eval_point) = sumcheck::prove(poly, transcript_p);
         let commitment = pcs.commit(&[poly.clone()], transcript_p);
-        let proof = pcs.prove(&commitment, &[poly], &eval_point, transcript_p);
+        let proof = pcs.prove(&commitment, &[poly.clone()], &eval_point, transcript_p);
 
         // Verifier work
         if let Ok(final_claim) = sumcheck::verify(sumcheck_claim, transcript_v) {
@@ -86,13 +72,18 @@ mod tests {
     where
         [(); F::NUM_BYTES_IN_REPR]:,
     {
+        let mut poly: VirtualPolynomial<F> = polys[0].clone().into();
+        for p in polys.iter().skip(1) {
+            poly.mul_assign_mle(p);
+        }
+
         let tensor_pcs = TensorPCS::new(4);
 
         let mut transcript_p = MockTranscript::default();
         let mut transcript_v = MockTranscript::default();
 
         zerocheck_test::<_, E, _, TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>>(
-            polys,
+            &mut poly,
             &mut transcript_p,
             &mut transcript_v,
             tensor_pcs,
@@ -103,6 +94,11 @@ mod tests {
     where
         [(); F::NUM_BYTES_IN_REPR]:,
     {
+        let mut poly: VirtualPolynomial<F> = polys[0].clone().into();
+        for p in polys.iter().skip(1) {
+            poly.mul_assign_mle(p);
+        }
+
         let tensor_pcs = TensorPCS::new(4);
 
         let mut transcript_p = MockTranscript::default();
@@ -114,7 +110,7 @@ mod tests {
             _,
             TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>,
         >(
-            polys, &mut transcript_p, &mut transcript_v, tensor_pcs
+            &poly, &mut transcript_p, &mut transcript_v, tensor_pcs
         ));
     }
 

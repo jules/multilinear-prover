@@ -2,7 +2,7 @@
 
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::{MultilinearExtension, MultivariatePolynomial},
+    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
     univariate_utils::*,
 };
@@ -29,8 +29,8 @@ pub struct SumcheckProof<F: Field, E: ChallengeField<F>> {
 // TODO(opt): https://eprint.iacr.org/2024/108.pdf,
 // https://people.cs.georgetown.edu/jthaler/small-sumcheck.pdf,
 // https://eprint.iacr.org/2024/1210.pdf
-pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>, MV: MultivariatePolynomial<F>>(
-    poly: &MV,
+pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
+    poly: &VirtualPolynomial<F>,
     transcript: &mut T,
 ) -> (SumcheckProof<F, E>, Vec<E>) {
     let n_rounds = poly.num_vars();
@@ -90,10 +90,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>, MV: MultivariateP
 // (where `d` is the degree of the multivariate polynomial), which are then interpolated into
 // monomial coefficients.
 #[inline(always)]
-fn sumcheck_step<F: Field, MV: MultivariatePolynomial<F>>(
-    poly: &MV,
-    degree: usize,
-) -> (Vec<F>, (F, F)) {
+fn sumcheck_step<F: Field>(poly: &VirtualPolynomial<F>, degree: usize) -> (Vec<F>, (F, F)) {
     let evals = poly.sum_evaluations();
 
     // Extrapolate any extra `degree - 1` coefficients.

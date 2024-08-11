@@ -21,6 +21,11 @@ impl<F: Field> MultivariatePolynomial<F> for MultilinearExtension<F> {
     }
 
     #[inline(always)]
+    fn evals(&self) -> &[F] {
+        &self.evals
+    }
+
+    #[inline(always)]
     fn eval(&self, index: usize) -> F {
         self.evals[index]
     }
@@ -35,16 +40,9 @@ impl<F: Field> MultivariatePolynomial<F> for MultilinearExtension<F> {
         self.evals.truncate(new_len);
     }
 
+    #[inline(always)]
     fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> MultilinearExtension<E> {
         MultilinearExtension::<E>::new(self.fix_variable_ext_internal(point))
-    }
-
-    fn add(&self, other: impl MultivariatePolynomial<F>) -> VirtualPolynomial<F> {
-        todo!()
-    }
-
-    fn mul(&self, other: impl MultivariatePolynomial<F>) -> VirtualPolynomial<F> {
-        todo!()
     }
 }
 
