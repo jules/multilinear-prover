@@ -9,8 +9,12 @@ pub struct VirtualPolynomial<F: Field> {
 }
 
 impl<F: Field> VirtualPolynomial<F> {
-    pub fn new(evals: Vec<F>, constituents: Vec<MultilinearExtension<F>>) -> Self {
-        todo!()
+    pub fn new(evals: Vec<F>, constituents: Vec<MultilinearExtension<F>>, degree: usize) -> Self {
+        Self {
+            degree,
+            constituents,
+            evals,
+        }
     }
 
     pub fn add_assign(&mut self, other: &Self) {
@@ -22,11 +26,24 @@ impl<F: Field> VirtualPolynomial<F> {
     }
 
     pub fn add_assign_mle(&mut self, other: &MultilinearExtension<F>) {
-        todo!()
+        self.constituents.push(other.clone());
+        self.evals
+            .iter_mut()
+            .zip(other.evals.iter())
+            .for_each(|(e, o)| {
+                e.add_assign(o);
+            });
     }
 
     pub fn mul_assign_mle(&mut self, other: &MultilinearExtension<F>) {
-        todo!()
+        self.constituents.push(other.clone());
+        self.evals
+            .iter_mut()
+            .zip(other.evals.iter())
+            .for_each(|(e, o)| {
+                e.mul_assign(o);
+            });
+        self.degree += 1;
     }
 }
 
@@ -73,6 +90,6 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
 
 impl<F: Field> From<MultilinearExtension<F>> for VirtualPolynomial<F> {
     fn from(value: MultilinearExtension<F>) -> Self {
-        Self::new(value.evals.clone(), vec![value])
+        Self::new(value.evals.clone(), vec![value], 1)
     }
 }
