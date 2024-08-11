@@ -9,16 +9,17 @@
 #![cfg_attr(target_arch = "aarch64", feature(stdarch_aarch64_prefetch))]
 #![allow(refining_impl_trait)]
 
-mod circle_fft;
+mod fft;
 mod field;
 mod iop;
 mod linear_code;
 mod merkle_tree;
 mod pcs;
 mod polynomial;
+mod transcript;
+mod univariate_utils;
+
 #[cfg(test)]
 mod test_utils;
 #[cfg(test)]
 mod tests;
-mod transcript;
-mod univariate_utils;

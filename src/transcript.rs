@@ -2,7 +2,7 @@ use crate::field::{ChallengeField, Field, PrimeField};
 use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
 
-pub trait Transcript<F: Field> {
+pub trait Transcript<F: Field>: Send + Sync {
     fn draw_challenge(&mut self) -> F;
     fn draw_challenge_ext<E: ChallengeField<F>>(&mut self) -> E;
     fn draw_bits(&mut self, bits: usize) -> usize;

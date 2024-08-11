@@ -1,4 +1,4 @@
-use super::{MultivariatePolynomial, VirtualPolynomial};
+use super::MultivariatePolynomial;
 use crate::field::{ChallengeField, Field};
 
 /// A multilinear polynomial represented in the Lagrange basis.

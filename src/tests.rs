@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
+        fft::CircleFFT,
         field::{
             m31::{quartic::M31_4, M31},
             ChallengeField, Field,
@@ -13,6 +14,9 @@ mod tests {
         transcript::Transcript,
     };
     use core::marker::PhantomData;
+
+    const POLY_SIZE_BITS: u32 = 20;
+    const ROOTS_OF_UNITY_BITS: usize = 12;
 
     fn zerocheck_test<
         F: Field,
@@ -66,49 +70,41 @@ mod tests {
         }
     }
 
-    fn tensor_pcs_zerocheck<F: Field, E: ChallengeField<F>>(
-        polys: &[MultilinearExtension<F>],
-    ) -> bool
-    where
-        [(); F::NUM_BYTES_IN_REPR]:,
-    {
-        let mut poly: VirtualPolynomial<F> = polys[0].clone().into();
+    fn tensor_pcs_zerocheck(polys: &[MultilinearExtension<M31>]) -> bool {
+        let mut poly: VirtualPolynomial<M31> = polys[0].clone().into();
         for p in polys.iter().skip(1) {
             poly.mul_assign_mle(p);
         }
 
-        let tensor_pcs = TensorPCS::new(4);
+        let tensor_pcs = TensorPCS::new(4, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
 
         let mut transcript_p = MockTranscript::default();
         let mut transcript_v = MockTranscript::default();
 
-        zerocheck_test::<_, E, _, TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>>(
-            &mut poly,
-            &mut transcript_p,
-            &mut transcript_v,
-            tensor_pcs,
-        )
+        zerocheck_test::<
+            M31,
+            M31_4,
+            MockTranscript<M31>,
+            TensorPCS<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
+        >(&mut poly, &mut transcript_p, &mut transcript_v, tensor_pcs)
     }
 
-    fn tensor_pcs_sumcheck<F: Field, E: ChallengeField<F>>(polys: &[MultilinearExtension<F>])
-    where
-        [(); F::NUM_BYTES_IN_REPR]:,
-    {
-        let mut poly: VirtualPolynomial<F> = polys[0].clone().into();
+    fn tensor_pcs_sumcheck(polys: &[MultilinearExtension<M31>]) {
+        let mut poly: VirtualPolynomial<M31> = polys[0].clone().into();
         for p in polys.iter().skip(1) {
             poly.mul_assign_mle(p);
         }
 
-        let tensor_pcs = TensorPCS::new(4);
+        let tensor_pcs = TensorPCS::new(4, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
 
         let mut transcript_p = MockTranscript::default();
         let mut transcript_v = MockTranscript::default();
 
         assert!(sumcheck_test::<
-            _,
-            E,
-            _,
-            TensorPCS<F, MockTranscript<F>, E, ReedSolomonCode<F, E>>,
+            M31,
+            M31_4,
+            MockTranscript<M31>,
+            TensorPCS<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
         >(
             &poly, &mut transcript_p, &mut transcript_v, tensor_pcs
         ));
@@ -116,39 +112,39 @@ mod tests {
 
     #[test]
     fn tensor_pcs_1_poly_test() {
-        tensor_pcs_sumcheck::<M31, M31_4>(&[rand_poly(2u32.pow(20) as usize)]);
+        tensor_pcs_sumcheck(&[rand_poly(2u32.pow(POLY_SIZE_BITS) as usize)]);
     }
 
     #[test]
     fn tensor_pcs_64_poly_test() {
-        tensor_pcs_sumcheck::<M31, M31_4>(
+        tensor_pcs_sumcheck(
             &(0..64)
-                .map(|_| rand_poly(2u32.pow(20) as usize))
+                .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
                 .collect::<Vec<MultilinearExtension<M31>>>(),
         );
     }
 
     #[test]
     fn tensor_pcs_1_poly_test_zerocheck_fail() {
-        assert!(!tensor_pcs_zerocheck::<M31, M31_4>(&[rand_poly(
-            2u32.pow(4) as usize
+        assert!(!tensor_pcs_zerocheck(&[rand_poly(
+            2u32.pow(POLY_SIZE_BITS) as usize
         )]));
     }
 
     #[test]
     fn tensor_pcs_64_poly_test_zerocheck_fail() {
-        assert!(!tensor_pcs_zerocheck::<M31, M31_4>(
+        assert!(!tensor_pcs_zerocheck(
             &(0..64)
-                .map(|_| rand_poly(2u32.pow(4) as usize))
+                .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
                 .collect::<Vec<MultilinearExtension<M31>>>(),
         ));
     }
 
     #[test]
     fn tensor_pcs_1_poly_test_zerocheck() {
-        assert!(tensor_pcs_zerocheck::<M31, M31_4>(&[
-            MultilinearExtension::new(vec![M31::ZERO; 2u32.pow(4) as usize])
-        ]));
+        assert!(tensor_pcs_zerocheck(&[MultilinearExtension::new(
+            vec![M31::ZERO; 2u32.pow(POLY_SIZE_BITS) as usize]
+        )]));
     }
 
     #[test]
@@ -156,13 +152,14 @@ mod tests {
         // Because we currently stand-in the constraint poly for a entrywise mult between all polys, we
         // can create a successful zerocheck by inputting one zero polynomial.
         let mut polys = (0..64)
-            .map(|_| rand_poly(2u32.pow(4) as usize))
+            .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
             .collect::<Vec<MultilinearExtension<M31>>>();
         polys.push(MultilinearExtension::new(vec![
             M31::ZERO;
-            2u32.pow(4) as usize
+            2u32.pow(POLY_SIZE_BITS)
+                as usize
         ]));
 
-        assert!(tensor_pcs_zerocheck::<M31, M31_4>(&polys));
+        assert!(tensor_pcs_zerocheck(&polys));
     }
 }

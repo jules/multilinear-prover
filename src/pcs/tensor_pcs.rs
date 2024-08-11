@@ -5,36 +5,52 @@ use crate::{
     linear_code::LinearCode,
     merkle_tree::{verify_path, MerkleTree},
     pcs::PolynomialCommitmentScheme,
-    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
+    polynomial::{MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
 };
 use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
 use rayon::prelude::*;
 
-pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F, E>> {
+pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
     n_test_queries: usize,
+    code: LC,
     _f_marker: PhantomData<F>,
     _t_marker: PhantomData<T>,
     _e_marker: PhantomData<E>,
-    _lc_marker: PhantomData<LC>,
 }
 
-impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F, E>>
-    TensorPCS<F, T, E, LC>
-{
-    pub fn new(n_test_queries: usize) -> Self {
+impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> TensorPCS<F, T, E, LC> {
+    pub fn new(n_test_queries: usize, code: LC) -> Self {
         Self {
             n_test_queries,
+            code,
             _f_marker: PhantomData::<F>,
             _t_marker: PhantomData::<T>,
             _e_marker: PhantomData::<E>,
-            _lc_marker: PhantomData::<LC>,
         }
     }
 }
 
-impl<F: Field, LC: LinearCode<F, E>, T: Transcript<F>, E: ChallengeField<F>>
+impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> TensorPCS<F, T, E, LC> {
+    fn encode_ext(&self, coeffs: &[E]) -> Vec<E> {
+        // Just unpack the coeffs to single field elements for now and then let the FFT take care
+        // of the repacking.
+        let mut unpacked = coeffs
+            .iter()
+            .flat_map(|e| Into::<Vec<F>>::into(*e))
+            .collect::<Vec<F>>();
+        self.code.encode(&mut unpacked);
+
+        // Now repack them and return
+        unpacked
+            .chunks(4)
+            .map(|chunk| E::new(chunk.to_vec()))
+            .collect::<Vec<E>>()
+    }
+}
+
+impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>>
     PolynomialCommitmentScheme<F, T, E> for TensorPCS<F, T, E, LC>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
@@ -52,13 +68,14 @@ where
             .map(|poly| {
                 poly.evals()
                     .par_chunks(log_size)
-                    .flat_map(|chunk| LC::encode(chunk))
+                    .flat_map(|chunk| self.code.encode(chunk))
                     .collect::<Vec<F>>()
             })
             .collect::<Vec<Vec<F>>>();
 
         // Create the column hashes for each matrix.
-        let row_size = log_size * LC::BLOWUP;
+        let row_size = log_size << LC::BLOWUP_BITS;
+        println!("{row_size}");
         let leaves = matrices
             .iter()
             .map(|matrix| {
@@ -136,7 +153,7 @@ where
         // Compute merkle proofs for n rows in the committed matrix. Extract columns to include
         // in the proof.
         // XXX figure out optimal n
-        let row_size = (log_size * LC::BLOWUP) as usize;
+        let row_size = (log_size << LC::BLOWUP_BITS) as usize;
         (
             t_prime,
             (0..self.n_test_queries)
@@ -181,11 +198,11 @@ where
         );
 
         // Encode t_prime.
-        let enc_t_prime = LC::encode_ext(&proof.0);
+        let enc_t_prime = self.encode_ext(&proof.0);
 
         // Ensure that merkle paths and column evaluations are correct.
         let log_size = proof.0.len();
-        let row_size = (log_size * LC::BLOWUP) as usize;
+        let row_size = (log_size << LC::BLOWUP_BITS) as usize;
         for i in 0..self.n_test_queries {
             let index = transcript.draw_bits(row_size);
             if !verify_val::<F, E>(&proof.1[i].1, &outer_expansion, enc_t_prime[index])
@@ -260,14 +277,13 @@ fn tensor_product_expansion<F: Field, E: ChallengeField<F>>(eval: &[E]) -> Vec<E
 mod tests {
     use super::*;
     use crate::{
+        fft::CircleFFT,
         field::{
             m31::{quartic::M31_4, M31},
             Field,
         },
         linear_code::reed_solomon::ReedSolomonCode,
-        polynomial::mle::MultilinearExtension,
         test_utils::{rand_poly, MockTranscript},
-        transcript::Transcript,
     };
     use rand::Rng;
 
@@ -275,12 +291,12 @@ mod tests {
     fn commit_prove_verify_single_poly() {
         let poly = rand_poly(2u32.pow(20) as usize);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, M31_4>> {
+        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: 4,
+            code: ReedSolomonCode::new(12),
             _f_marker: PhantomData::<M31>,
             _t_marker: PhantomData::<MockTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
-            _lc_marker: PhantomData::<ReedSolomonCode<M31, M31_4>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
 

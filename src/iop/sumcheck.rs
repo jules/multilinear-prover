@@ -2,7 +2,7 @@
 
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
+    polynomial::{MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
     univariate_utils::*,
 };

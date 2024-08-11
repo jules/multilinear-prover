@@ -1,10 +1,9 @@
 pub mod reed_solomon;
 
-use crate::field::{ChallengeField, Field};
+use crate::field::Field;
 
-pub trait LinearCode<F: Field, E: ChallengeField<F>> {
-    const BLOWUP: usize;
+pub trait LinearCode<F: Field>: Send + Sync {
+    const BLOWUP_BITS: usize;
 
-    fn encode(els: &[F]) -> Vec<F>;
-    fn encode_ext(els: &[E]) -> Vec<E>;
+    fn encode(&self, els: &[F]) -> Vec<F>;
 }

@@ -1,28 +1,27 @@
 use super::*;
-use crate::{circle_fft::*, univariate_utils::*};
+use crate::fft::FFT;
 use core::marker::PhantomData;
 
-pub struct ReedSolomonCode<F: Field, E: ChallengeField<F>> {
-    _f_marker: PhantomData<F>,
-    _e_marker: PhantomData<E>,
+pub struct ReedSolomonCode<F: Field, D: FFT<F>> {
+    fft: D,
+    _marker: PhantomData<F>,
 }
 
-impl<F: Field, E: ChallengeField<F>> LinearCode<F, E> for ReedSolomonCode<F, E> {
-    const BLOWUP: usize = 4;
-
-    // Since we only expect small vectors (the MLE is already turned into a square matrix for which
-    // we encode each row separately) we simply multiply with a Vandermonde matrix to get the RS
-    // encoding.
-    fn encode(els: &[F]) -> Vec<F> {
-        (0..(els.len() * Self::BLOWUP))
-            .map(|i| univariate_eval(els, F::from_usize(i)))
-            .collect::<Vec<F>>()
+impl<F: Field, D: FFT<F>> ReedSolomonCode<F, D> {
+    pub fn new(order_bits: usize) -> Self {
+        let fft = D::new(order_bits, Self::BLOWUP_BITS);
+        Self {
+            fft,
+            _marker: PhantomData::<F>,
+        }
     }
+}
 
-    // TODO: this should be extricated since it's more specific to the tensor pcs
-    fn encode_ext(els: &[E]) -> Vec<E> {
-        (0..(els.len() * Self::BLOWUP))
-            .map(|i| univariate_eval_ext(els, F::from_usize(i)))
-            .collect::<Vec<E>>()
+impl<F: Field, D: FFT<F>> LinearCode<F> for ReedSolomonCode<F, D> {
+    const BLOWUP_BITS: usize = 2;
+
+    // Perform a simple low-degree extension with an FFT.
+    fn encode(&self, els: &[F]) -> Vec<F> {
+        self.fft.lde(&els)
     }
 }
