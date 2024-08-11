@@ -8,6 +8,7 @@
 //
 // Most of the code here is taken from Plonky3 https://github.com/Plonky3/Plonky3/blob/main/mersenne-31/.
 
+use super::FFT;
 use crate::field::{
     m31::{complex::M31_2, M31},
     Field, PrimeField, TwoAdicField,
@@ -15,6 +16,57 @@ use crate::field::{
 
 const ORDER_SQ: i64 = (M31::ORDER as i64) * (M31::ORDER as i64);
 const TWO_ORDER_SQ: i64 = 2 * ORDER_SQ;
+
+pub struct CircleFFT {
+    roots: Vec<M31>,
+    blowup_roots: Vec<M31>,
+    blowup_bits: usize,
+}
+
+impl FFT<M31> for CircleFFT {
+    fn new(order_bits: usize, blowup_bits: usize) -> Self {
+        // We chop off one bit from the order since we are making complex roots of unity, not real
+        // ones.
+        let roots = precompute_roots(order_bits - 1)
+            .iter()
+            .flat_map(|v| [v.c0, v.c1])
+            .collect::<Vec<M31>>();
+        let blowup_roots = precompute_roots(order_bits - 1 + blowup_bits)
+            .iter()
+            .flat_map(|v| [v.c0, v.c1])
+            .collect::<Vec<M31>>();
+
+        Self {
+            roots,
+            blowup_roots,
+            blowup_bits,
+        }
+    }
+
+    fn fft(&self, coeffs: &[M31]) -> Vec<M31> {
+        let mut packed = preprocess(coeffs);
+        let packed_roots = preprocess(&self.roots);
+        fft(&mut packed, &packed_roots);
+        postprocess(&packed)
+    }
+
+    fn ifft(&self, coeffs: &[M31]) -> Vec<M31> {
+        let mut packed = preprocess(coeffs);
+        let packed_roots = preprocess(&self.roots);
+        ifft(&mut packed, &packed_roots);
+        postprocess(&packed)
+    }
+
+    fn lde(&self, coeffs: &[M31]) -> Vec<M31> {
+        let mut packed = preprocess(coeffs);
+        let packed_roots = preprocess(&self.roots);
+        ifft(&mut packed, &packed_roots);
+        packed.resize(packed.len() << self.blowup_bits, M31_2::ZERO);
+        let packed_blowup_roots = preprocess(&self.blowup_roots);
+        fft(&mut packed, &packed_blowup_roots);
+        postprocess(&packed)
+    }
+}
 
 fn bitreverse_idx(mut n: u32, l: u32) -> u32 {
     let mut r = 0;
@@ -80,19 +132,8 @@ pub fn postprocess(coeffs: &[M31_2]) -> Vec<M31> {
 /// Fast Fourier Transform, allowing us to interpret the coefficients of a polynomial, and
 /// evaluate the polynomial. Due to usage of the circle group FFT, the resulting vector of
 /// coefficients resides in the complex extension of M31.
-pub fn fft(coeffs: &[M31_2], roots: &[M31_2]) -> Vec<M31_2> {
+pub fn fft(coeffs: &mut [M31_2], roots: &[M31_2]) {
     debug_assert!(roots.len() == coeffs.len());
-
-    // Preprocess the coefficients; this means we need to pack them into complex field elements.
-    let mut compressed_coeffs = coeffs.to_vec();
-
-    fft_inner(&mut compressed_coeffs, roots);
-
-    compressed_coeffs
-}
-
-fn fft_inner(coeffs: &mut [M31_2], roots: &[M31_2]) {
-    // Now we can perform our transformation.
     let twiddles = &roots[..roots.len() / 2];
     let log_len = coeffs.len().ilog2() as usize;
     bit_reverse(coeffs);
@@ -142,22 +183,20 @@ fn dit_layer(coeffs: &mut [M31_2], layer: usize, rev_layer: usize, twiddles: &[M
 /// Inverse Fast Fourier transform, which allows us to turn a set of polynomial evaluations (in
 /// the extension of M31) into a set of coefficients. The resulting vector will be in the base field
 /// of M31.
-pub fn ifft(coeffs: &[M31_2], roots: &[M31_2]) -> Vec<M31_2> {
-    let mut inverted_coeffs = coeffs.to_vec();
-    fft_inner(&mut inverted_coeffs, roots);
+pub fn ifft(coeffs: &mut [M31_2], roots: &[M31_2]) {
+    fft(coeffs, roots);
 
     // Scale result
-    let len_inv = M31_2::from_usize(inverted_coeffs.len()).inverse().unwrap();
-    inverted_coeffs
+    let len_inv = M31_2::from_usize(coeffs.len()).inverse().unwrap();
+    coeffs
         .iter_mut()
         .for_each(|coeff| coeff.mul_assign(&len_inv));
 
     // Postprocessing and unpacking.
-    let h = inverted_coeffs.len();
+    let h = coeffs.len();
     for i in 1..h / 2 {
-        inverted_coeffs.swap(i, h - i);
+        coeffs.swap(i, h - i);
     }
-    inverted_coeffs
 }
 
 #[cfg(test)]
@@ -178,8 +217,10 @@ mod tests {
         let order = 19;
         let roots = precompute_roots(order);
         let poly = rand_poly::<M31>(2u32.pow(20) as usize);
-        let preprocessed = preprocess(&poly.evals);
-        let result = postprocess(&ifft(&fft(&preprocessed, &roots), &roots));
+        let mut preprocessed = preprocess(&poly.evals);
+        fft(&mut preprocessed, &roots);
+        ifft(&mut preprocessed, &roots);
+        let result = postprocess(&preprocessed);
         assert!(
             poly.evals.iter().fold(M31::ZERO, |mut acc, x| {
                 acc.add_assign(x);
@@ -200,8 +241,10 @@ mod tests {
     fn test_ifft_roundtrip() {
         let roots = precompute_roots(19);
         let poly = rand_poly::<M31>(2u32.pow(20) as usize);
-        let preprocessed = preprocess(&poly.evals);
-        let result = postprocess(&fft(&ifft(&preprocessed, &roots), &roots));
+        let mut preprocessed = preprocess(&poly.evals);
+        fft(&mut preprocessed, &roots);
+        ifft(&mut preprocessed, &roots);
+        let result = postprocess(&preprocessed);
         assert!(
             poly.evals.iter().fold(M31::ZERO, |mut acc, x| {
                 acc.add_assign(x);
@@ -223,10 +266,11 @@ mod tests {
         let roots = precompute_roots(3);
         let blowup_roots = precompute_roots(4);
         let poly = rand_poly::<M31>(2u32.pow(4) as usize);
-        let preprocessed = preprocess(&poly.evals);
-        let mut ifft_output = ifft(&preprocessed, &roots);
-        ifft_output.resize(ifft_output.len() << 1, M31_2::ZERO);
-        let result = postprocess(&fft(&ifft_output, &blowup_roots));
+        let mut preprocessed = preprocess(&poly.evals);
+        ifft(&mut preprocessed, &roots);
+        preprocessed.resize(preprocessed.len() << 1, M31_2::ZERO);
+        fft(&mut preprocessed, &blowup_roots);
+        let result = postprocess(&preprocessed);
         assert!(poly
             .evals
             .iter()
