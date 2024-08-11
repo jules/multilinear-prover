@@ -1,6 +1,9 @@
 use super::{MultilinearExtension, MultivariatePolynomial};
 use crate::field::{ChallengeField, Field};
+use core::cmp::max;
 
+/// A representation of multiple polynomials mixed together with addition or multiplication.
+// NOTE no bookkeeping on how mixings were performed
 #[derive(Clone, Debug)]
 pub struct VirtualPolynomial<F: Field> {
     degree: usize,
@@ -18,11 +21,25 @@ impl<F: Field> VirtualPolynomial<F> {
     }
 
     pub fn add_assign(&mut self, other: &Self) {
-        todo!()
+        self.constituents.extend(other.constituents.clone());
+        self.evals
+            .iter_mut()
+            .zip(other.evals.iter())
+            .for_each(|(e, o)| {
+                e.add_assign(o);
+            });
+        self.degree = max(self.degree, other.degree);
     }
 
     pub fn mul_assign(&mut self, other: &Self) {
-        todo!()
+        self.constituents.extend(other.constituents.clone());
+        self.evals
+            .iter_mut()
+            .zip(other.evals.iter())
+            .for_each(|(e, o)| {
+                e.mul_assign(o);
+            });
+        self.degree += other.degree;
     }
 
     pub fn add_assign_mle(&mut self, other: &MultilinearExtension<F>) {
