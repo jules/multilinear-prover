@@ -3,7 +3,7 @@
 use super::sumcheck::{self, SumcheckError, SumcheckProof};
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::MultilinearExtension,
+    polynomial::{MultilinearExtension, MultivariatePolynomial},
     transcript::Transcript,
 };
 
@@ -12,13 +12,14 @@ use crate::{
 /// randomly zeroes out all points except for one - allowing us to check for a constraint
 /// polynomial being zero-everywhere on the cube without potential cheating by making all
 /// evaluations sum to zero, for instance.
-pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
-    polys: &[MultilinearExtension<F>],
+pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>, MV: MultivariatePolynomial<F>>(
+    poly: &MV,
     transcript: &mut T,
-) -> (SumcheckProof<F, E>, Vec<E>, Vec<MultilinearExtension<F>>) {
+) -> (SumcheckProof<F, E>, Vec<E>, Vec<F>) {
     // Draw a list of challenges with which we create the `eq` polynomial.
-    let mut c = vec![F::ZERO; polys[0].num_vars()];
+    let mut c = vec![F::ZERO; poly.num_vars()];
     c.iter_mut().for_each(|e| *e = transcript.draw_challenge());
+
     // For the purposes of creating `eq`, we will also create a vector of `1 - challenge`.
     let one_minus_c = c
         .iter()
@@ -30,8 +31,8 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
         .collect::<Vec<F>>();
 
     // Create the `eq` polynomial. Depending on when a variable is 0 or 1, we either input (1 - r)
-    // or r as the term for the multiplication. Do this for 2^num_vars.
-    let mut eq_evals = vec![F::ZERO; polys[0].evals.len()];
+    // or r as the term for the multiplication.
+    let mut eq_evals = vec![F::ZERO; poly.len()];
     eq_evals.iter_mut().enumerate().for_each(|(i, eval)| {
         *eval = c.iter().enumerate().fold(F::ONE, |mut acc, (j, chal)| {
             let flip = ((i >> j) ^ 1) != 0;
@@ -44,13 +45,12 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
         });
     });
 
-    // Push this to our set of polynomials
-    let mut polys = polys.to_vec();
-    polys.push(MultilinearExtension::new(eq_evals));
+    // Multiply with our polynomial.
+    let poly = poly.mul(MultilinearExtension::new(eq_evals.clone()));
 
     // Finally, just run the sumcheck prover and return the needed information.
-    let (proof, evals) = sumcheck::prove(&polys, transcript);
-    (proof, evals, polys)
+    let (proof, evals) = sumcheck::prove(&poly, transcript);
+    (proof, evals, eq_evals)
 }
 
 /// Runs the zerocheck verifier.

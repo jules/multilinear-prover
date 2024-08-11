@@ -10,7 +10,7 @@
 
 use crate::field::{
     m31::{complex::M31_2, M31},
-    ChallengeField, Field, PrimeField, TwoAdicField,
+    Field, PrimeField, TwoAdicField,
 };
 
 const ORDER_SQ: i64 = (M31::ORDER as i64) * (M31::ORDER as i64);

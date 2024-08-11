@@ -26,7 +26,7 @@ mod tests {
         pcs: PCS,
     ) -> bool {
         // Prover work
-        let (sumcheck_claim, eval_point, polys_with_f_hat) = zerocheck::prove(polys, transcript_p);
+        let (sumcheck_claim, eval_point, eq_evals) = zerocheck::prove(polys, transcript_p);
 
         let mut poly = polys_with_f_hat[0].clone();
         for p in &polys_with_f_hat[1..] {

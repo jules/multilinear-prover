@@ -2,7 +2,7 @@
 
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::mle::MultilinearExtension,
+    polynomial::{MultilinearExtension, MultivariatePolynomial},
     transcript::Transcript,
     univariate_utils::*,
 };
@@ -29,38 +29,22 @@ pub struct SumcheckProof<F: Field, E: ChallengeField<F>> {
 // TODO(opt): https://eprint.iacr.org/2024/108.pdf,
 // https://people.cs.georgetown.edu/jthaler/small-sumcheck.pdf,
 // https://eprint.iacr.org/2024/1210.pdf
-pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
-    polys: &[MultilinearExtension<F>],
+pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>, MV: MultivariatePolynomial<F>>(
+    poly: &MV,
     transcript: &mut T,
 ) -> (SumcheckProof<F, E>, Vec<E>) {
-    debug_assert!(polys.iter().all(|p| p.evals.len() == polys[0].evals.len()));
-
-    let n_rounds = polys[0].num_vars();
-    let degree = polys.len();
+    let n_rounds = poly.num_vars();
+    let degree = poly.degree();
     let mut proofs = Vec::with_capacity(n_rounds);
     let mut challenges = Vec::with_capacity(n_rounds);
-
-    // Perform the polynomial product. This is just entrywise mult.
-    // XXX i think this is something that the sumcheck prover actually shouldn't do, and instead we
-    // should send some abstraction like a 'CompositionPolynomial' which contains degree
-    // information.
-    let mut poly = polys[0].clone();
-    for p in &polys[1..] {
-        poly.evals
-            .iter_mut()
-            .zip(p.evals.iter())
-            .for_each(|(eval, m)| eval.mul_assign(m));
-    }
 
     // In the first round we have no challenge to fix the polynomial with, and we also need to
     // collect the claimed sum from this step; this allows the verifier to reductively check all
     // other claimed sums from just a single field element.
     // So, in this first round, we unroll the logic and do it manually.
-    let (coeffs, evals) = sumcheck_step(&poly, degree);
-    let claimed_sum = evals.iter().fold(F::ZERO, |mut acc, x| {
-        acc.add_assign(x);
-        acc
-    });
+    let (coeffs, evals) = sumcheck_step(poly, degree);
+    let mut claimed_sum = evals.0.clone();
+    claimed_sum.add_assign(&evals.1);
     let coeffs = coeffs.into_iter().map(|c| E::from(c)).collect::<Vec<E>>();
     transcript.observe_witnesses(
         &coeffs
@@ -77,7 +61,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
 
     // For the remaining rounds (except for last), we always start by summing the evaluations,
     // interpolating the intermediate polynomial and then generating and fixing a new challenge.
-    for i in 0..(n_rounds - 1) {
+    for _ in 0..(n_rounds - 1) {
         let (coeffs, _) = sumcheck_step(&poly_lifted, degree);
         transcript.observe_witnesses(
             &coeffs
@@ -106,25 +90,30 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
 // (where `d` is the degree of the multivariate polynomial), which are then interpolated into
 // monomial coefficients.
 #[inline(always)]
-fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>, degree: usize) -> (Vec<F>, Vec<F>) {
+fn sumcheck_step<F: Field, MV: MultivariatePolynomial<F>>(
+    poly: &MV,
+    degree: usize,
+) -> (Vec<F>, (F, F)) {
     let evals = poly.sum_evaluations();
 
     // Extrapolate any extra `degree - 1` coefficients.
     // Taking into account that any multivariate polynomial can be evaluated at a specific point by
     // the equation (letting x be the point we want to check) p(x, X_1, ..., X_n) = (1 - x) * p(0,
     // X_1, ..., X_n) + x * p(1, X_1, ..., X_n).
-    let mut extended_evals = evals.clone();
+    let mut extended_evals = Vec::with_capacity(degree + 1);
+    extended_evals.push(evals.0);
+    extended_evals.push(evals.1);
     for i in 1..degree {
         let mut a = F::from_usize(i + 1);
         let mut one_minus_a = F::ONE;
         one_minus_a.sub_assign(&a);
-        a.mul_assign(&evals[1]);
-        one_minus_a.mul_assign(&evals[0]);
+        a.mul_assign(&evals.1);
+        one_minus_a.mul_assign(&evals.0);
         a.add_assign(&one_minus_a);
         extended_evals.push(a);
     }
 
-    let mut coeffs = lagrange_interpolation(&extended_evals);
+    let coeffs = lagrange_interpolation(&extended_evals);
     (coeffs, evals)
 }
 
@@ -141,7 +130,7 @@ pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
 ) -> Result<E, SumcheckError> {
     let SumcheckProof {
         proofs,
-        mut claimed_sum,
+        claimed_sum,
     } = proof;
 
     // For each step we:
@@ -165,7 +154,7 @@ pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     let mut claimed_sum = univariate_eval(&proofs[0], c);
 
     // We performed the base field check so now we proceed into the extension field.
-    for (i, coeffs) in proofs.into_iter().enumerate().skip(1) {
+    for coeffs in proofs.into_iter().skip(1) {
         let mut res = univariate_eval(&coeffs, E::ZERO);
         res.add_assign(&univariate_eval(&coeffs, E::ONE));
         if res != claimed_sum {

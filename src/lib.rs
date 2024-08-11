@@ -7,6 +7,7 @@
 #![feature(const_swap)]
 #![feature(raw_slice_split)]
 #![cfg_attr(target_arch = "aarch64", feature(stdarch_aarch64_prefetch))]
+#![allow(refining_impl_trait)]
 
 mod circle_fft;
 mod field;

@@ -5,7 +5,7 @@ use crate::{
     linear_code::LinearCode,
     merkle_tree::{verify_path, MerkleTree},
     pcs::PolynomialCommitmentScheme,
-    polynomial::mle::MultilinearExtension,
+    polynomial::{MultilinearExtension, MultivariatePolynomial},
     transcript::Transcript,
 };
 use blake2::{Blake2s256, Digest};
