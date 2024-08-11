@@ -56,7 +56,7 @@ pub fn precompute_roots(order_bits: usize) -> Vec<M31_2> {
         }
     }
 
-    debug_assert!(*roots.last().unwrap() == M31_2::ONE);
+    debug_assert!(*roots.first().unwrap() == M31_2::ONE);
     roots
 }
 
