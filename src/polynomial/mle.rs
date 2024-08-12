@@ -12,6 +12,14 @@ impl<F: Field> MultilinearExtension<F> {
         debug_assert!(evals.len().is_power_of_two());
         Self { evals }
     }
+
+    pub fn merge(&self, other: Self) -> Self {
+        debug_assert!(self.len() == other.len());
+        let mut new_evals = Vec::with_capacity(self.len() * 2);
+        new_evals.extend(self.evals.clone());
+        new_evals.extend(other.evals.clone());
+        Self::new(new_evals)
+    }
 }
 
 impl<F: Field> MultivariatePolynomial<F> for MultilinearExtension<F> {
