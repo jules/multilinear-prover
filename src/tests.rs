@@ -40,7 +40,13 @@ mod tests {
             if final_claim != E::ZERO {
                 return false;
             }
-            pcs.verify(&commitment, &eval_point, final_claim, &proof, transcript_v)
+            pcs.verify(
+                &commitment,
+                &eval_point,
+                &[final_claim],
+                &proof,
+                transcript_v,
+            )
         } else {
             false
         }
@@ -64,7 +70,13 @@ mod tests {
 
         // Verifier work
         if let Ok(final_claim) = sumcheck::verify(sumcheck_claim, transcript_v) {
-            pcs.verify(&commitment, &eval_point, final_claim, &proof, transcript_v)
+            pcs.verify(
+                &commitment,
+                &eval_point,
+                &[final_claim],
+                &proof,
+                transcript_v,
+            )
         } else {
             false
         }

@@ -48,7 +48,7 @@ where
         &self,
         comm: &Self::Commitment,
         eval: &[E],
-        result: E,
+        results: &[E],
         proof: &Self::Proof,
         transcript: &mut T,
     ) -> bool {

@@ -131,13 +131,28 @@ where
         // Mix all t' into one using challenges.
         let n_challenges = comm.1.len().ilog2() as usize;
         let t_prime: Vec<E> = if n_challenges > 0 {
-            //let mut challenges = Vec::with_capacity(n_challenges);
-            //for _ in 0..n_challenges {
-            //    challenges.push(transcript.draw_challenge_ext());
-            //}
+            let mut challenges = Vec::with_capacity(n_challenges);
+            for _ in 0..n_challenges {
+                challenges.push(transcript.draw_challenge_ext());
+            }
 
-            // MIX
-            t_primes.into_iter().flatten().collect() // TODO
+            // TODO unoptimized
+            let expansion = tensor_product_expansion(&challenges);
+            expansion.iter().enumerate().for_each(|(i, coeff)| {
+                t_primes[i].iter_mut().for_each(|e| e.mul_assign(coeff));
+            });
+
+            t_primes[0]
+                .clone()
+                .into_iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    (1..t_primes.len()).fold(e, |mut acc, j| {
+                        acc.add_assign(&t_primes[j][i]);
+                        acc
+                    })
+                })
+                .collect::<Vec<E>>()
         } else {
             t_primes.into_iter().flatten().collect()
         };
@@ -181,12 +196,39 @@ where
         &self,
         comm: &Self::Commitment,
         eval: &[E],
-        result: E,
+        results: &[E],
         proof: &Self::Proof,
         transcript: &mut T,
     ) -> bool {
         let inner_expansion = tensor_product_expansion(&eval[..eval.len() / 2]);
         let outer_expansion = tensor_product_expansion(&eval[eval.len() / 2..]);
+
+        // Create batch value.
+        let n_challenges = comm.1.len().ilog2() as usize;
+        let result = if n_challenges > 0 {
+            let mut challenges: Vec<E> = Vec::with_capacity(n_challenges);
+            for _ in 0..n_challenges {
+                challenges.push(transcript.draw_challenge_ext());
+            }
+
+            let expansion = tensor_product_expansion(&challenges);
+
+            // Return the inner product of the expanded challenges and the results.
+            expansion
+                .into_iter()
+                .zip(results.iter())
+                .map(|(a, b)| {
+                    let mut a = a.clone();
+                    a.mul_assign(b);
+                    a
+                })
+                .fold(E::ZERO, |mut acc, x| {
+                    acc.add_assign(&x);
+                    acc
+                })
+        } else {
+            results[0].clone()
+        };
 
         // Enter t_prime into the transcript.
         transcript.observe_witnesses(
@@ -318,7 +360,7 @@ mod tests {
         assert!(pcs.verify(
             &commitment,
             &eval,
-            res.evals[0],
+            &[res.evals[0]],
             &proof,
             &mut MockTranscript::default()
         ));
