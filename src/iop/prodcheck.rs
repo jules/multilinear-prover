@@ -14,6 +14,9 @@ use crate::{
 /// malicious prover can ensure that the elements are set so that the product of s1 does not equal
 /// the product of s2, but becomes equal modulo the field order. Therefore, we need to perform some
 /// extra trickery to make the claim sound.
+///
+/// Note that we don't need a verifier here as the evaluation proof is done outside of the iop
+/// module and the proof returned can be verified with the [`zerocheck`] verifier.
 pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     unsorted: &[MultilinearExtension<F>],
     sorted: &[MultilinearExtension<F>],
@@ -121,6 +124,3 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     let (proof, evals) = zerocheck::prove(&mut a, transcript);
     (proof, evals, a, prod_poly)
 }
-
-/// Verify a prodcheck proof.
-pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>() {}
