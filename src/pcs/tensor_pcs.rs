@@ -75,7 +75,6 @@ where
 
         // Create the column hashes for each matrix.
         let row_size = log_size << LC::BLOWUP_BITS;
-        println!("{row_size}");
         let leaves = matrices
             .iter()
             .map(|matrix| {
