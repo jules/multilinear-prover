@@ -205,16 +205,18 @@ where
 
         // Create batch value.
         let n_challenges = comm.1.len().ilog2() as usize;
+        let mut expansion = vec![];
         let result = if n_challenges > 0 {
             let mut challenges: Vec<E> = Vec::with_capacity(n_challenges);
             for _ in 0..n_challenges {
                 challenges.push(transcript.draw_challenge_ext());
             }
 
-            let expansion = tensor_product_expansion(&challenges);
+            expansion = tensor_product_expansion(&challenges);
 
             // Return the inner product of the expanded challenges and the results.
             expansion
+                .clone()
                 .into_iter()
                 .zip(results.iter())
                 .map(|(a, b)| {
@@ -247,8 +249,12 @@ where
         let row_size = (log_size << LC::BLOWUP_BITS) as usize;
         for i in 0..self.n_test_queries {
             let index = transcript.draw_bits(row_size);
-            if !verify_val::<F, E>(&proof.1[i].1, &outer_expansion, enc_t_prime[index])
-                || !verify_path(&proof.1[i].0)
+            if !verify_val::<F, E>(
+                &proof.1[i].1,
+                &outer_expansion,
+                enc_t_prime[index],
+                &expansion,
+            ) || !verify_path(&proof.1[i].0)
             {
                 return false;
             }
@@ -268,7 +274,12 @@ where
     }
 }
 
-fn verify_val<F: Field, E: ChallengeField<F>>(columns: &[Vec<F>], tensor: &[E], eval: E) -> bool {
+fn verify_val<F: Field, E: ChallengeField<F>>(
+    columns: &[Vec<F>],
+    tensor: &[E],
+    eval: E,
+    mixing_coeffs: &[E],
+) -> bool {
     let evals = columns
         .iter()
         .map(|column| {
@@ -286,11 +297,19 @@ fn verify_val<F: Field, E: ChallengeField<F>>(columns: &[Vec<F>], tensor: &[E], 
 
     // Mix if we have multiple polys.
     let final_eval = if evals.len() > 1 {
-        evals.iter().fold(E::ZERO, |mut acc, e| {
-            // MIX TODO
-            acc.add_assign(e);
-            acc
-        })
+        debug_assert!(evals.len() == mixing_coeffs.len());
+        mixing_coeffs
+            .into_iter()
+            .zip(evals.iter())
+            .map(|(a, b)| {
+                let mut a = a.clone();
+                a.mul_assign(b);
+                a
+            })
+            .fold(E::ZERO, |mut acc, x| {
+                acc.add_assign(&x);
+                acc
+            })
     } else {
         evals[0]
     };
