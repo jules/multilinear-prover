@@ -54,7 +54,6 @@ mod tests {
         // Verifier work
         if let Ok(final_claim) = zerocheck::verify(sumcheck_claim, transcript_v) {
             if final_claim != E::ZERO {
-                println!("final claim isnt zero");
                 return false;
             }
             pcs.verify(
