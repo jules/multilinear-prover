@@ -13,11 +13,15 @@ impl<F: Field> MultilinearExtension<F> {
         Self { evals }
     }
 
+    /// What is called `merge` in the papers is actually an interleaving of two multilinear
+    /// polynomials.
     pub fn merge(&self, other: Self) -> Self {
         debug_assert!(self.len() == other.len());
         let mut new_evals = Vec::with_capacity(self.len() * 2);
-        new_evals.extend(self.evals.clone());
-        new_evals.extend(other.evals.clone());
+        for i in 0..self.len() {
+            new_evals.push(self.evals[i]);
+            new_evals.push(other.evals[i]);
+        }
         Self::new(new_evals)
     }
 }

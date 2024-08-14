@@ -83,11 +83,14 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // 0) = frac(x) and f(x, 1) = f(0, x) * f(1, x).
     let mut prod_evals = Vec::with_capacity(frac_poly.len() * 2);
     frac_poly.evals.iter().for_each(|e| prod_evals.push(*e));
-    for i in 0..prod_evals.len() {
+    for i in 0..(prod_evals.len() - 1) {
         let mut lhs = prod_evals[i << 1];
         lhs.mul_assign(&prod_evals[(i << 1) + 1]);
         prod_evals.push(lhs);
     }
+
+    // Last evaluation should be zero.
+    prod_evals.push(F::ZERO);
 
     let prod_poly = MultilinearExtension::new(prod_evals);
 
