@@ -61,8 +61,9 @@ where
     fn commit(&self, polys: &[VirtualPolynomial<F>], _transcript: &mut T) -> Self::Commitment {
         debug_assert!(polys.iter().all(|p| p.len() == polys[0].len()));
 
-        // Turn the polys into m x m matrices row-wise, then encode row-wise.
-        let log_size = polys[0].len().isqrt();
+        // Turn the polys into matrices, then encode row-wise.
+        // We take the next-power-of-two as the number of rows.
+        let log_size = polys[0].len().isqrt().next_power_of_two();
         let matrices = polys
             .iter()
             .map(|poly| {
@@ -75,13 +76,14 @@ where
 
         // Create the column hashes for each matrix.
         let row_size = log_size << LC::BLOWUP_BITS;
+        let depth = polys[0].len() / row_size;
         let leaves = matrices
             .iter()
             .map(|matrix| {
                 (0..row_size)
                     .map(|i| {
                         let mut hasher = Blake2s256::new();
-                        (0..log_size).for_each(|j| {
+                        (0..depth).for_each(|j| {
                             hasher.update(matrix[i + j * row_size].to_le_bytes().to_vec());
                         });
                         <[u8; 32]>::from(hasher.finalize())
@@ -112,10 +114,10 @@ where
         // We want to compute the tensor product expansion of the top half of the evaluation
         // variables. We then compute the vector-matrix product of this tensor product expansion
         // paired with each polynomial.
-        let outer_expansion = tensor_product_expansion(&eval[eval.len() / 2..]);
+        let log_size = polys[0].len().isqrt().next_power_of_two();
+        let outer_expansion = tensor_product_expansion(&eval[(log_size.ilog2() as usize)..]);
 
         // Calculate the t' for each t (poly) with the vector-matrix product.
-        let log_size = polys[0].len().isqrt();
         let mut t_primes = vec![vec![E::ZERO; log_size]; polys.len()];
         t_primes.iter_mut().enumerate().for_each(|(i, t_prime)| {
             outer_expansion.iter().enumerate().for_each(|(j, tensor)| {
@@ -168,6 +170,7 @@ where
         // in the proof.
         // XXX figure out optimal n
         let row_size = (log_size << LC::BLOWUP_BITS) as usize;
+        let depth = comm.1[0].len() / row_size;
         (
             t_prime,
             (0..self.n_test_queries)
@@ -179,11 +182,7 @@ where
                     let cols = comm
                         .1
                         .iter()
-                        .map(|matrix| {
-                            (0..log_size)
-                                .map(|i| matrix[i * row_size])
-                                .collect::<Vec<F>>()
-                        })
+                        .map(|matrix| (0..depth).map(|i| matrix[i * row_size]).collect::<Vec<F>>())
                         .collect::<Vec<Vec<F>>>();
                     (path, cols)
                 })
@@ -199,8 +198,9 @@ where
         proof: &Self::Proof,
         transcript: &mut T,
     ) -> bool {
-        let inner_expansion = tensor_product_expansion(&eval[..eval.len() / 2]);
-        let outer_expansion = tensor_product_expansion(&eval[eval.len() / 2..]);
+        let log_size = proof.0.len();
+        let inner_expansion = tensor_product_expansion(&eval[..(log_size.ilog2() as usize)]);
+        let outer_expansion = tensor_product_expansion(&eval[(log_size.ilog2() as usize)..]);
 
         // Create batch value.
         let n_challenges = comm.1.len().ilog2() as usize;
@@ -244,7 +244,6 @@ where
         let enc_t_prime = self.encode_ext(&proof.0);
 
         // Ensure that merkle paths and column evaluations are correct.
-        let log_size = proof.0.len();
         let row_size = (log_size << LC::BLOWUP_BITS) as usize;
         for i in 0..self.n_test_queries {
             let index = transcript.draw_bits(row_size);
@@ -347,13 +346,17 @@ mod tests {
     };
     use rand::Rng;
 
+    const POLY_SIZE_BITS: u32 = 20;
+    const ROOTS_OF_UNITY_BITS: usize = 12;
+    const N_QUERIES: usize = 4;
+
     #[test]
     fn commit_prove_verify_single_poly() {
-        let poly = rand_poly(2u32.pow(20) as usize);
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
-            n_test_queries: 4,
-            code: ReedSolomonCode::new(12),
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
             _t_marker: PhantomData::<MockTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
@@ -386,12 +389,12 @@ mod tests {
 
     #[test]
     fn commit_prove_verify_2_poly() {
-        let poly = rand_poly(2u32.pow(20) as usize);
-        let poly_2 = rand_poly(2u32.pow(20) as usize);
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let poly_2 = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
-            n_test_queries: 4,
-            code: ReedSolomonCode::new(12),
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
             _t_marker: PhantomData::<MockTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,

@@ -15,7 +15,7 @@ mod tests {
     };
 
     const POLY_SIZE_BITS: u32 = 20;
-    const ROOTS_OF_UNITY_BITS: usize = 12;
+    const ROOTS_OF_UNITY_BITS: usize = 13;
 
     fn prodcheck_test<
         F: Field,
@@ -254,11 +254,9 @@ mod tests {
         assert!(tensor_pcs_zerocheck(&polys));
     }
 
-    // TODO size discrepancies here cause the fft to break because the pcs cant have a power of 2
-    // sized square matrix
     #[test]
     fn tensor_pcs_1_poly_test_prodcheck() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS - 1) as usize);
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
         let mut sorted = poly.clone();
         sorted.evals.sort();
         assert!(tensor_pcs_prodcheck(&[poly], &[sorted]));
@@ -266,8 +264,8 @@ mod tests {
 
     #[test]
     fn tensor_pcs_1_poly_test_prodcheck_fail() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS - 1) as usize);
-        let sorted = rand_poly(2u32.pow(POLY_SIZE_BITS - 1) as usize);
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let sorted = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
         assert!(!tensor_pcs_prodcheck(&[poly], &[sorted]));
     }
 }
