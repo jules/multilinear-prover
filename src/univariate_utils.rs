@@ -1,7 +1,65 @@
 use crate::field::{ChallengeField, Field};
 
+pub fn precompute_lagrange_coefficients<F: Field>(size: usize) -> Vec<Vec<F>> {
+    let multiply_polys = |a: &[F], b: &[F]| -> Vec<F> {
+        let mut result = vec![F::ZERO; a.len() + b.len() - 1];
+        a.iter().enumerate().for_each(|(i, c1)| {
+            b.iter().enumerate().for_each(|(j, c2)| {
+                let mut m = c1.clone();
+                m.mul_assign(c2);
+                result[i + j].add_assign(&m);
+            });
+        });
+
+        result
+    };
+
+    let mut precomputed = vec![vec![]; size];
+    for i in 0..size {
+        let mut coeffs = vec![F::ONE];
+        for j in 0..size {
+            if i != j {
+                let denom_inv = {
+                    let mut i = F::from_usize(i);
+                    let j = F::from_usize(j);
+                    i.sub_assign(&j);
+                    i.inverse().unwrap()
+                };
+                let mut new_coeffs = vec![F::ZERO; 2];
+                new_coeffs[0] = F::from_usize(j);
+                new_coeffs[0].negate();
+                new_coeffs[0].mul_assign(&denom_inv);
+                new_coeffs[1] = denom_inv;
+                coeffs = multiply_polys(&coeffs, &new_coeffs);
+            }
+        }
+
+        precomputed[i] = coeffs;
+    }
+
+    precomputed
+}
+
 // Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
-// TODO(opt): can be sped up if we precompute lagrange coeffs for a given size
+// Uses precomputed coefficients.
+pub fn lagrange_interpolation_with_precompute<F: Field>(
+    evals: &[F],
+    precomputed: &[Vec<F>],
+) -> Vec<F> {
+    let mut polynomial = vec![F::ZERO; evals.len()];
+    evals.iter().enumerate().for_each(|(i, eval)| {
+        let coeffs = &precomputed[i];
+        coeffs.iter().enumerate().for_each(|(k, c)| {
+            let mut res = eval.clone();
+            res.mul_assign(c);
+            polynomial[k].add_assign(&res);
+        });
+    });
+
+    polynomial
+}
+
+// Standard lagrange interpolation, assuming indices for evals are 0, 1, 2, ...
 pub fn lagrange_interpolation<F: Field>(evals: &[F]) -> Vec<F> {
     let multiply_polys = |a: &[F], b: &[F]| -> Vec<F> {
         let mut result = vec![F::ZERO; a.len() + b.len() - 1];

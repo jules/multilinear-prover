@@ -65,10 +65,10 @@ where
         // We take the next-power-of-two as the number of rows.
         let log_size = polys[0].len().isqrt().next_power_of_two();
         let matrices = polys
-            .iter()
+            .par_iter()
             .map(|poly| {
                 poly.evals()
-                    .par_chunks(log_size)
+                    .chunks(log_size)
                     .flat_map(|chunk| self.code.encode(chunk))
                     .collect::<Vec<F>>()
             })
@@ -78,9 +78,10 @@ where
         let row_size = log_size << LC::BLOWUP_BITS;
         let depth = polys[0].len() / row_size;
         let leaves = matrices
-            .iter()
+            .par_iter()
             .map(|matrix| {
                 (0..row_size)
+                    .into_par_iter()
                     .map(|i| {
                         let mut hasher = Blake2s256::new();
                         (0..depth).for_each(|j| {
@@ -145,7 +146,7 @@ where
 
             t_primes[0]
                 .clone()
-                .into_iter()
+                .into_par_iter()
                 .enumerate()
                 .map(|(i, e)| {
                     (1..t_primes.len()).fold(e, |mut acc, j| {
@@ -174,6 +175,7 @@ where
         (
             t_prime,
             (0..self.n_test_queries)
+                .into_iter()
                 .map(|_| {
                     // Sample a random index for a given row.
                     let index = transcript.draw_bits(row_size);

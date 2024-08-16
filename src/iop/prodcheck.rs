@@ -21,6 +21,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     unsorted: &[MultilinearExtension<F>],
     sorted: &[MultilinearExtension<F>],
     transcript: &mut T,
+    precomputed: &[Vec<F>],
 ) -> (
     SumcheckProof<F, E>,
     Vec<E>,
@@ -124,6 +125,6 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     b.evals.iter_mut().for_each(|e| e.negate());
     a.add_assign(&b);
 
-    let (proof, evals) = zerocheck::prove(&mut a, transcript);
+    let (proof, evals) = zerocheck::prove(&mut a, transcript, precomputed);
     (proof, evals, a, prod_poly)
 }

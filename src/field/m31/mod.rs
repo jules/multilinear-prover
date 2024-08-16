@@ -1,5 +1,3 @@
-// taken mostly from air compiler
-
 pub mod complex;
 pub mod quartic;
 
@@ -88,9 +86,10 @@ impl Field for M31 {
         self.0 == 0
     }
 
+    // Since the nonzero elements of GF(pn) form a finite group with respect to multiplication,
+    // a^p^n−1 = 1 (for a ≠ 0), thus the inverse of a is a^p^n−2.
+    // Code from https://github.com/Plonky3/Plonky3/blob/main/mersenne-31/src/mersenne_31.rs#L235
     fn inverse(&self) -> Option<Self> {
-        //Since the nonzero elements of GF(pn) form a finite group with respect to multiplication,
-        // a^p^n−1 = 1 (for a ≠ 0), thus the inverse of a is a^p^n−2.
         if self.is_zero() {
             return None;
         }

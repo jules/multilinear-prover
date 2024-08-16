@@ -15,6 +15,7 @@ use crate::{
 pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     poly: &mut VirtualPolynomial<F>,
     transcript: &mut T,
+    precomputed: &[Vec<F>],
 ) -> (SumcheckProof<F, E>, Vec<E>) {
     // Draw a list of challenges with which we create the `eq` polynomial.
     let mut c = vec![F::ZERO; poly.num_vars()];
@@ -49,7 +50,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     poly.mul_assign_mle(&MultilinearExtension::new(eq_evals.clone()));
 
     // Finally, just run the sumcheck prover and return the needed information.
-    let (proof, evals) = sumcheck::prove(&poly, transcript);
+    let (proof, evals) = sumcheck::prove(&poly, transcript, precomputed);
     (proof, evals)
 }
 

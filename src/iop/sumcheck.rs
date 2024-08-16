@@ -32,6 +32,7 @@ pub struct SumcheckProof<F: Field, E: ChallengeField<F>> {
 pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     poly: &VirtualPolynomial<F>,
     transcript: &mut T,
+    precomputed: &[Vec<F>],
 ) -> (SumcheckProof<F, E>, Vec<E>) {
     let n_rounds = poly.num_vars();
     let degree = poly.degree();
@@ -42,7 +43,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // collect the claimed sum from this step; this allows the verifier to reductively check all
     // other claimed sums from just a single field element.
     // So, in this first round, we unroll the logic and do it manually.
-    let (coeffs, evals) = sumcheck_step(poly, degree);
+    let (coeffs, evals) = sumcheck_step(poly, degree, precomputed);
     let mut claimed_sum = evals.0.clone();
     claimed_sum.add_assign(&evals.1);
     let coeffs = coeffs.into_iter().map(|c| E::from(c)).collect::<Vec<E>>();
@@ -59,10 +60,15 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // Before the next round, we need to lift to the extension by using the first challenge.
     let mut poly_lifted = poly.fix_variable_ext::<E>(challenge);
 
+    let precomputed = precomputed
+        .iter()
+        .map(|v| v.iter().map(|e| Into::<E>::into(*e)).collect::<Vec<E>>())
+        .collect::<Vec<Vec<E>>>();
+
     // For the remaining rounds (except for last), we always start by summing the evaluations,
     // interpolating the intermediate polynomial and then generating and fixing a new challenge.
     for _ in 0..(n_rounds - 1) {
-        let (coeffs, _) = sumcheck_step(&poly_lifted, degree);
+        let (coeffs, _) = sumcheck_step(&poly_lifted, degree, &precomputed);
         transcript.observe_witnesses(
             &coeffs
                 .iter()
@@ -90,7 +96,11 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
 // (where `d` is the degree of the multivariate polynomial), which are then interpolated into
 // monomial coefficients.
 #[inline(always)]
-fn sumcheck_step<F: Field>(poly: &VirtualPolynomial<F>, degree: usize) -> (Vec<F>, (F, F)) {
+fn sumcheck_step<F: Field>(
+    poly: &VirtualPolynomial<F>,
+    degree: usize,
+    precomputed: &[Vec<F>],
+) -> (Vec<F>, (F, F)) {
     let evals = poly.sum_evaluations();
 
     // Extrapolate any extra `degree - 1` coefficients.
@@ -110,7 +120,7 @@ fn sumcheck_step<F: Field>(poly: &VirtualPolynomial<F>, degree: usize) -> (Vec<F
         extended_evals.push(a);
     }
 
-    let coeffs = lagrange_interpolation(&extended_evals);
+    let coeffs = lagrange_interpolation_with_precompute(&extended_evals, precomputed);
     (coeffs, evals)
 }
 

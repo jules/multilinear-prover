@@ -1,6 +1,7 @@
 use crate::field::Field;
 use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
+use rayon::prelude::*;
 
 pub struct MerkleTree<F: Field> {
     root: [u8; 32],
@@ -20,6 +21,7 @@ where
         // i'th entry of each layer together to make a single leaf.
         let compressed_leaves = if leaves.len() > 1 {
             (0..col_size)
+                .into_par_iter()
                 .map(|i| {
                     let mut hasher = Blake2s256::new();
                     leaves.iter().for_each(|layer| {
@@ -42,7 +44,7 @@ where
 
             let last = layers.last().unwrap();
             let new_layer = last
-                .chunks(2)
+                .par_chunks(2)
                 .map(|c| {
                     let mut hasher = Blake2s256::new();
                     hasher.update(c[0]);

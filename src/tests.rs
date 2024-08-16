@@ -12,6 +12,7 @@ mod tests {
         polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
         test_utils::{rand_poly, MockTranscript},
         transcript::Transcript,
+        univariate_utils::precompute_lagrange_coefficients,
     };
 
     const POLY_SIZE_BITS: u32 = 20;
@@ -30,8 +31,9 @@ mod tests {
         pcs: PCS,
     ) -> bool {
         // Prover work
+        let precomputed = precompute_lagrange_coefficients(4);
         let (sumcheck_claim, eval_point, zero_poly, prod_poly) =
-            prodcheck::prove(unsorted_columns, sorted_columns, transcript_p);
+            prodcheck::prove(unsorted_columns, sorted_columns, transcript_p, &precomputed);
 
         let zero_commitment = pcs.commit(&[zero_poly.clone()], transcript_p);
         let zero_proof = pcs.prove(
@@ -81,15 +83,31 @@ mod tests {
         PCS: PolynomialCommitmentScheme<F, T, E>,
     >(
         poly: &mut VirtualPolynomial<F>,
+        polys: &[MultilinearExtension<F>],
         transcript_p: &mut T,
         transcript_v: &mut T,
         pcs: PCS,
     ) -> bool {
         // Prover work
-        let (sumcheck_claim, eval_point) = zerocheck::prove(poly, transcript_p);
+        let precomputed = precompute_lagrange_coefficients(poly.degree() + 2);
+        let now = std::time::Instant::now();
+        let (sumcheck_claim, eval_point) = zerocheck::prove(poly, transcript_p, &precomputed);
+        let elapsed = std::time::Instant::now();
+        println!("zerocheck {:?}", elapsed - now);
 
-        let commitment = pcs.commit(&[poly.clone()], transcript_p);
-        let proof = pcs.prove(&commitment, &[poly.clone()], &eval_point, transcript_p);
+        let virt = polys
+            .iter()
+            .map(|p| p.clone().into())
+            .collect::<Vec<VirtualPolynomial<F>>>();
+
+        let now = std::time::Instant::now();
+        let commitment = pcs.commit(&virt, transcript_p);
+        let elapsed = std::time::Instant::now();
+        println!("commit {:?}", elapsed - now);
+        let now = std::time::Instant::now();
+        let proof = pcs.prove(&commitment, &virt, &eval_point, transcript_p);
+        let elapsed = std::time::Instant::now();
+        println!("prove {:?}", elapsed - now);
 
         // Verifier work
         if let Ok(final_claim) = zerocheck::verify(sumcheck_claim, transcript_v) {
@@ -120,7 +138,8 @@ mod tests {
         pcs: PCS,
     ) -> bool {
         // Prover work
-        let (sumcheck_claim, eval_point) = sumcheck::prove(poly, transcript_p);
+        let precomputed = precompute_lagrange_coefficients(poly.degree() + 2);
+        let (sumcheck_claim, eval_point) = sumcheck::prove(poly, transcript_p, &precomputed);
         let commitment = pcs.commit(&[poly.clone()], transcript_p);
         let proof = pcs.prove(&commitment, &[poly.clone()], &eval_point, transcript_p);
 
@@ -167,7 +186,7 @@ mod tests {
             poly.mul_assign_mle(p);
         }
 
-        let tensor_pcs = TensorPCS::new(4, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
+        let tensor_pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
 
         let mut transcript_p = MockTranscript::default();
         let mut transcript_v = MockTranscript::default();
@@ -177,7 +196,13 @@ mod tests {
             M31_4,
             MockTranscript<M31>,
             TensorPCS<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
-        >(&mut poly, &mut transcript_p, &mut transcript_v, tensor_pcs)
+        >(
+            &mut poly,
+            polys,
+            &mut transcript_p,
+            &mut transcript_v,
+            tensor_pcs,
+        )
     }
 
     fn tensor_pcs_sumcheck(polys: &[MultilinearExtension<M31>]) {
@@ -252,6 +277,22 @@ mod tests {
         ]));
 
         assert!(tensor_pcs_zerocheck(&polys));
+    }
+
+    #[test]
+    fn tensor_pcs_256() {
+        // Because we currently stand-in the constraint poly for a entrywise mult between all polys, we
+        // can create a successful zerocheck by inputting one zero polynomial.
+        let mut polys = (0..255)
+            .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        polys.push(MultilinearExtension::new(vec![
+            M31::ZERO;
+            2u32.pow(POLY_SIZE_BITS)
+                as usize
+        ]));
+
+        tensor_pcs_zerocheck(&polys);
     }
 
     #[test]
