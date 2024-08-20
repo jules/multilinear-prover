@@ -2,6 +2,7 @@ use super::*;
 use crate::fft::FFT;
 use core::marker::PhantomData;
 
+/// Reed-Solomon encoding for polynomial evaluation vectors.
 pub struct ReedSolomonCode<F: Field, D: FFT<F>> {
     fft: D,
     _marker: PhantomData<F>,

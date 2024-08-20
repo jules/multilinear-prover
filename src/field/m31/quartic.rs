@@ -128,13 +128,9 @@ impl Field for M31_4 {
 
     fn to_le_bytes(self) -> [u8; Self::NUM_BYTES_IN_REPR] {
         self.c0
-            .c0
-            .as_reduced_u32()
             .to_le_bytes()
             .into_iter()
-            .chain(self.c0.c1.as_reduced_u32().to_le_bytes().into_iter())
-            .chain(self.c1.c0.as_reduced_u32().to_le_bytes().into_iter())
-            .chain(self.c1.c1.as_reduced_u32().to_le_bytes().into_iter())
+            .chain(self.c1.to_le_bytes().into_iter())
             .collect::<Vec<u8>>()
             .try_into()
             .expect("should be able to create bytes array")

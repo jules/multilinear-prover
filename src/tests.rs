@@ -312,4 +312,30 @@ mod tests {
         let sorted = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
         assert!(!tensor_pcs_prodcheck(&[poly], &[sorted]));
     }
+
+    #[test]
+    fn tensor_pcs_8_poly_test_prodcheck() {
+        let polys = (0..8)
+            .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        let mut sorted = polys.clone();
+        sorted.iter_mut().for_each(|poly| {
+            poly.evals.sort();
+        });
+        assert!(tensor_pcs_prodcheck(&polys, &sorted));
+    }
+
+    #[test]
+    fn tensor_pcs_8_poly_test_prodcheck_fail() {
+        let polys = (0..8)
+            .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        let mut sorted = polys.clone();
+        sorted[0] = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize); // set one polynomial to be
+                                                                  // different
+        sorted.iter_mut().for_each(|poly| {
+            poly.evals.sort();
+        });
+        assert!(!tensor_pcs_prodcheck(&polys, &sorted));
+    }
 }

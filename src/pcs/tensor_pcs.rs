@@ -1,4 +1,4 @@
-//! Tensor PCS from [DP23] https://eprint.iacr.org/2023/630.pdf.
+//! Tensor PCS from [DP23] https://eprint.iacr.org/2023/1784.pdf, section 3.3 construction 3.7.
 
 use crate::{
     field::{ChallengeField, Field},
@@ -12,6 +12,8 @@ use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
 use rayon::prelude::*;
 
+/// An implementation of Diamond and Posen's tensor polynomial commitment scheme, which is linear
+/// in prover complexity and has easily configurable soundness.
 pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
     n_test_queries: usize,
     code: LC,
