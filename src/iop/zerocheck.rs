@@ -36,7 +36,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     let mut eq_evals = vec![F::ZERO; poly.len()];
     eq_evals.iter_mut().enumerate().for_each(|(i, eval)| {
         *eval = c.iter().enumerate().fold(F::ONE, |mut acc, (j, chal)| {
-            let flip = ((i >> j) ^ 1) != 0;
+            let flip = ((i >> j) & 1) == 0;
             if flip {
                 acc.mul_assign(&one_minus_c[j]);
             } else {
