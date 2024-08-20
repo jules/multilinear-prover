@@ -10,8 +10,8 @@ mod tests {
         linear_code::reed_solomon::ReedSolomonCode,
         pcs::{tensor_pcs::TensorPCS, PolynomialCommitmentScheme},
         polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
-        test_utils::{rand_poly, MockTranscript},
-        transcript::Transcript,
+        test_utils::rand_poly,
+        transcript::{Blake2sTranscript, Transcript},
         univariate_utils::precompute_lagrange_coefficients,
     };
 
@@ -166,14 +166,14 @@ mod tests {
     ) -> bool {
         let tensor_pcs = TensorPCS::new(4, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
 
-        let mut transcript_p = MockTranscript::default();
-        let mut transcript_v = MockTranscript::default();
+        let mut transcript_p = Blake2sTranscript::default();
+        let mut transcript_v = Blake2sTranscript::default();
 
         prodcheck_test::<
             M31,
             M31_4,
-            MockTranscript<M31>,
-            TensorPCS<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
+            Blake2sTranscript<M31>,
+            TensorPCS<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
         >(
             unsorted,
             sorted,
@@ -191,14 +191,14 @@ mod tests {
 
         let tensor_pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
 
-        let mut transcript_p = MockTranscript::default();
-        let mut transcript_v = MockTranscript::default();
+        let mut transcript_p = Blake2sTranscript::default();
+        let mut transcript_v = Blake2sTranscript::default();
 
         zerocheck_test::<
             M31,
             M31_4,
-            MockTranscript<M31>,
-            TensorPCS<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
+            Blake2sTranscript<M31>,
+            TensorPCS<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
         >(
             &mut poly,
             polys,
@@ -216,14 +216,14 @@ mod tests {
 
         let tensor_pcs = TensorPCS::new(4, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
 
-        let mut transcript_p = MockTranscript::default();
-        let mut transcript_v = MockTranscript::default();
+        let mut transcript_p = Blake2sTranscript::default();
+        let mut transcript_v = Blake2sTranscript::default();
 
         assert!(sumcheck_test::<
             M31,
             M31_4,
-            MockTranscript<M31>,
-            TensorPCS<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
+            Blake2sTranscript<M31>,
+            TensorPCS<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
         >(
             &poly, &mut transcript_p, &mut transcript_v, tensor_pcs
         ));
