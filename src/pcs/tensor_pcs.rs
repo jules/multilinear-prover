@@ -3,7 +3,7 @@
 use crate::{
     field::{ChallengeField, Field},
     linear_code::LinearCode,
-    merkle_tree::{verify_path, MerkleTree},
+    merkle_tree::MerkleTree,
     pcs::PolynomialCommitmentScheme,
     polynomial::{MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
@@ -38,14 +38,14 @@ impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> Tensor
     fn encode_ext(&self, coeffs: &[E]) -> Vec<E> {
         // Just unpack the coeffs to single field elements for now and then let the FFT take care
         // of the repacking.
-        let mut unpacked = coeffs
+        let unpacked = coeffs
             .iter()
             .flat_map(|e| Into::<Vec<F>>::into(*e))
             .collect::<Vec<F>>();
-        self.code.encode(&mut unpacked);
+        let encoded = self.code.encode(&unpacked);
 
         // Now repack them and return
-        unpacked
+        encoded
             .chunks(4)
             .map(|chunk| E::new(chunk.to_vec()))
             .collect::<Vec<E>>()
@@ -57,10 +57,10 @@ impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
 {
-    type Commitment = (MerkleTree<F>, Vec<Vec<F>>);
-    type Proof = (Vec<E>, Vec<(Vec<Vec<[u8; 32]>>, Vec<Vec<F>>)>);
+    type Commitment = (MerkleTree, Vec<Vec<F>>);
+    type Proof = (Vec<E>, Vec<(Vec<[[u8; 32]; 2]>, Vec<Vec<F>>)>);
 
-    fn commit(&self, polys: &[VirtualPolynomial<F>], _transcript: &mut T) -> Self::Commitment {
+    fn commit(&self, polys: &[VirtualPolynomial<F>], transcript: &mut T) -> Self::Commitment {
         debug_assert!(polys.iter().all(|p| p.len() == polys[0].len()));
 
         // Turn the polys into matrices, then encode row-wise.
@@ -98,13 +98,21 @@ where
         // Build a merkle tree out of our encoded matrices. We populate the base layer with a hash
         // of each column and then work up.
         // The merkle tree impl takes care of the layer-on-layer hashing.
-        (
-            MerkleTree::new(leaves, row_size as usize, log_size),
-            matrices,
-        )
+        let tree = MerkleTree::new(leaves);
+
+        // Observe merkle tree into transcript.
+        transcript.observe_hashes(
+            &tree
+                .elements
+                .clone()
+                .into_iter()
+                .flatten()
+                .collect::<Vec<[u8; 32]>>(),
+        );
+
+        (tree, matrices)
     }
 
-    // for now, we assume commitment was observed by transcript
     fn prove(
         &self,
         comm: &Self::Commitment,
@@ -179,14 +187,18 @@ where
             (0..self.n_test_queries)
                 .into_iter()
                 .map(|_| {
-                    // Sample a random index for a given row.
-                    let index = transcript.draw_bits(row_size);
+                    // Sample a random index for a given column.
+                    let index = transcript.draw_bits(row_size.ilog2() as usize);
                     let path = comm.0.get_proof(index);
                     // Extract a column per polynomial that we use in the proof.
                     let cols = comm
                         .1
                         .iter()
-                        .map(|matrix| (0..depth).map(|i| matrix[i * row_size]).collect::<Vec<F>>())
+                        .map(|matrix| {
+                            (0..depth)
+                                .map(|i| matrix[i * row_size + index])
+                                .collect::<Vec<F>>()
+                        })
                         .collect::<Vec<Vec<F>>>();
                     (path, cols)
                 })
@@ -205,6 +217,17 @@ where
         let log_size = proof.0.len();
         let inner_expansion = tensor_product_expansion(&eval[..(log_size.ilog2() as usize)]);
         let outer_expansion = tensor_product_expansion(&eval[(log_size.ilog2() as usize)..]);
+
+        // Observe commitment into transcript.
+        transcript.observe_hashes(
+            &comm
+                .0
+                .elements
+                .clone()
+                .into_iter()
+                .flatten()
+                .collect::<Vec<[u8; 32]>>(),
+        );
 
         // Create batch value.
         let n_challenges = comm.1.len().ilog2() as usize;
@@ -248,18 +271,28 @@ where
         let enc_t_prime = self.encode_ext(&proof.0);
 
         // Ensure that merkle paths and column evaluations are correct.
-        let row_size = (log_size << LC::BLOWUP_BITS) as usize;
         for i in 0..self.n_test_queries {
-            let index = transcript.draw_bits(row_size);
-            if !verify_val::<F, E>(
-                &proof.1[i].1,
-                &outer_expansion,
-                enc_t_prime[index],
-                &expansion,
-            ) || !verify_path(&proof.1[i].0)
-            {
-                return false;
-            }
+            let index = transcript.draw_bits(enc_t_prime.len().ilog2() as usize);
+            println!(
+                "{}",
+                verify_val(
+                    &proof.1[i].1,
+                    &outer_expansion,
+                    enc_t_prime[index],
+                    &expansion,
+                )
+            );
+            println!("{}", comm.0.verify_path(&proof.1[i].0));
+            panic!()
+            // if !verify_val(
+            //     &proof.1[i].1,
+            //     &outer_expansion,
+            //     enc_t_prime[index],
+            //     &expansion,
+            // ) || !comm.0.verify_path(&proof.1[i].0)
+            // {
+            //     return false;
+            // }
         }
 
         // Ensure that t_prime times inner tensor expansion equals result.
@@ -346,7 +379,8 @@ mod tests {
             Field,
         },
         linear_code::reed_solomon::ReedSolomonCode,
-        test_utils::{rand_poly, MockTranscript},
+        test_utils::rand_poly,
+        transcript::Blake2sTranscript,
     };
     use rand::Rng;
 
@@ -358,14 +392,15 @@ mod tests {
     fn commit_prove_verify_single_poly() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let mut prover_transcript = Blake2sTranscript::default();
+        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -375,19 +410,21 @@ mod tests {
             &commitment,
             &[poly.clone().into()],
             &eval,
-            &mut MockTranscript::default(),
+            &mut prover_transcript,
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
         eval.iter().skip(1).for_each(|e| {
             res.fix_variable(*e);
         });
+
+        let mut verifier_transcript = Blake2sTranscript::default();
         assert!(pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut MockTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -395,14 +432,14 @@ mod tests {
     fn commit_prove_verify_single_poly_wrong_eval() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -412,7 +449,7 @@ mod tests {
             &commitment,
             &[poly.clone().into()],
             &eval,
-            &mut MockTranscript::default(),
+            &mut Blake2sTranscript::default(),
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -428,7 +465,7 @@ mod tests {
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut MockTranscript::default()
+            &mut Blake2sTranscript::default()
         ));
     }
 
@@ -436,27 +473,29 @@ mod tests {
     fn commit_prove_verify_single_poly_wrong_commitment() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
             *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
         });
         let fake_poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
-        let fake_commitment =
-            pcs.commit(&[fake_poly.clone().into()], &mut MockTranscript::default());
+        let fake_commitment = pcs.commit(
+            &[fake_poly.clone().into()],
+            &mut Blake2sTranscript::default(),
+        );
         let proof = pcs.prove(
             &fake_commitment,
             &[poly.clone().into()],
             &eval,
-            &mut MockTranscript::default(),
+            &mut Blake2sTranscript::default(),
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -468,7 +507,7 @@ mod tests {
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut MockTranscript::default()
+            &mut Blake2sTranscript::default()
         ));
     }
 
@@ -476,14 +515,14 @@ mod tests {
     fn commit_prove_verify_single_poly_wrong_proof() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -494,7 +533,7 @@ mod tests {
             &commitment,
             &[fake_poly.clone().into()],
             &eval,
-            &mut MockTranscript::default(),
+            &mut Blake2sTranscript::default(),
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -506,7 +545,7 @@ mod tests {
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut MockTranscript::default()
+            &mut Blake2sTranscript::default()
         ));
     }
 
@@ -515,16 +554,16 @@ mod tests {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
         let poly_2 = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
-        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
         let commitment = pcs.commit(
             &[poly.clone().into(), poly_2.clone().into()],
-            &mut MockTranscript::default(),
+            &mut Blake2sTranscript::default(),
         );
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
@@ -535,7 +574,7 @@ mod tests {
             &commitment,
             &[poly.clone().into(), poly_2.clone().into()],
             &eval,
-            &mut MockTranscript::default(),
+            &mut Blake2sTranscript::default(),
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -551,7 +590,7 @@ mod tests {
             &eval,
             &[res.evals[0], res_2.evals[0]],
             &proof,
-            &mut MockTranscript::default()
+            &mut Blake2sTranscript::default()
         ));
     }
 }
