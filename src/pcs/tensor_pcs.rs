@@ -392,6 +392,125 @@ mod tests {
     }
 
     #[test]
+    fn commit_prove_verify_single_poly_wrong_eval() {
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+
+        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
+            _f_marker: PhantomData::<M31>,
+            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _e_marker: PhantomData::<M31_4>,
+        };
+        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+
+        let mut eval = vec![M31_4::default(); poly.num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        let proof = pcs.prove(
+            &commitment,
+            &[poly.clone().into()],
+            &eval,
+            &mut MockTranscript::default(),
+        );
+
+        let mut res = poly.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res.fix_variable(*e);
+        });
+        let mut eval = vec![M31_4::default(); poly.num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        assert!(!pcs.verify(
+            &commitment,
+            &eval,
+            &[res.evals[0]],
+            &proof,
+            &mut MockTranscript::default()
+        ));
+    }
+
+    #[test]
+    fn commit_prove_verify_single_poly_wrong_commitment() {
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+
+        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
+            _f_marker: PhantomData::<M31>,
+            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _e_marker: PhantomData::<M31_4>,
+        };
+        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+
+        let mut eval = vec![M31_4::default(); poly.num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        let fake_poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let fake_commitment =
+            pcs.commit(&[fake_poly.clone().into()], &mut MockTranscript::default());
+        let proof = pcs.prove(
+            &fake_commitment,
+            &[poly.clone().into()],
+            &eval,
+            &mut MockTranscript::default(),
+        );
+
+        let mut res = poly.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res.fix_variable(*e);
+        });
+        assert!(!pcs.verify(
+            &commitment,
+            &eval,
+            &[res.evals[0]],
+            &proof,
+            &mut MockTranscript::default()
+        ));
+    }
+
+    #[test]
+    fn commit_prove_verify_single_poly_wrong_proof() {
+        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+
+        let pcs = TensorPCS::<M31, MockTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
+            _f_marker: PhantomData::<M31>,
+            _t_marker: PhantomData::<MockTranscript<M31>>,
+            _e_marker: PhantomData::<M31_4>,
+        };
+        let commitment = pcs.commit(&[poly.clone().into()], &mut MockTranscript::default());
+
+        let mut eval = vec![M31_4::default(); poly.num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        let fake_poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let proof = pcs.prove(
+            &commitment,
+            &[fake_poly.clone().into()],
+            &eval,
+            &mut MockTranscript::default(),
+        );
+
+        let mut res = poly.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res.fix_variable(*e);
+        });
+        assert!(!pcs.verify(
+            &commitment,
+            &eval,
+            &[res.evals[0]],
+            &proof,
+            &mut MockTranscript::default()
+        ));
+    }
+
+    #[test]
     fn commit_prove_verify_2_poly() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
         let poly_2 = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
