@@ -21,6 +21,7 @@ impl<F: Field, D: FFT<F>> LinearCode<F> for ReedSolomonCode<F, D> {
     const BLOWUP_BITS: usize = 2;
 
     // Perform a simple low-degree extension with an FFT.
+    #[inline(always)]
     fn encode(&self, els: &[F]) -> Vec<F> {
         self.fft.lde(&els)
     }
