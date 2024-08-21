@@ -181,6 +181,7 @@ where
         // in the proof.
         // XXX figure out optimal n
         let row_size = (log_size << LC::BLOWUP_BITS) as usize;
+        let row_size_bits = row_size.ilog2() as usize;
         let depth = comm.1[0].len() / row_size;
         (
             t_prime,
@@ -188,7 +189,7 @@ where
                 .into_iter()
                 .map(|_| {
                     // Sample a random index for a given column.
-                    let index = transcript.draw_bits(row_size.ilog2() as usize);
+                    let index = transcript.draw_bits(row_size_bits);
                     let path = comm.0.get_proof(index);
                     // Extract a column per polynomial that we use in the proof.
                     let cols = comm

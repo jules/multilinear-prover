@@ -24,6 +24,6 @@ impl<F: Field, D: FFT<F>> LinearCode<F> for ReedSolomonCode<F, D> {
     // Perform a simple low-degree extension with an FFT.
     #[inline(always)]
     fn encode(&self, els: &[F]) -> Vec<F> {
-        self.fft.lde(&els)
+        self.fft.fft_extend(&els)
     }
 }
