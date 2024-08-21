@@ -418,13 +418,12 @@ mod tests {
             res.fix_variable(*e);
         });
 
-        let mut verifier_transcript = Blake2sTranscript::default();
         assert!(pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut verifier_transcript
+            &mut Blake2sTranscript::default()
         ));
     }
 
@@ -432,6 +431,7 @@ mod tests {
     fn commit_prove_verify_single_poly_wrong_eval() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
+        let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
@@ -439,7 +439,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -449,7 +449,7 @@ mod tests {
             &commitment,
             &[poly.clone().into()],
             &eval,
-            &mut Blake2sTranscript::default(),
+            &mut prover_transcript,
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -473,6 +473,7 @@ mod tests {
     fn commit_prove_verify_single_poly_wrong_commitment() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
+        let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
@@ -487,15 +488,12 @@ mod tests {
             *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
         });
         let fake_poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
-        let fake_commitment = pcs.commit(
-            &[fake_poly.clone().into()],
-            &mut Blake2sTranscript::default(),
-        );
+        let fake_commitment = pcs.commit(&[fake_poly.clone().into()], &mut prover_transcript);
         let proof = pcs.prove(
             &fake_commitment,
             &[poly.clone().into()],
             &eval,
-            &mut Blake2sTranscript::default(),
+            &mut prover_transcript,
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -515,6 +513,7 @@ mod tests {
     fn commit_prove_verify_single_poly_wrong_proof() {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
+        let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
@@ -522,7 +521,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
+        let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -533,7 +532,7 @@ mod tests {
             &commitment,
             &[fake_poly.clone().into()],
             &eval,
-            &mut Blake2sTranscript::default(),
+            &mut prover_transcript,
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
@@ -554,6 +553,7 @@ mod tests {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
         let poly_2 = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
+        let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
@@ -563,7 +563,7 @@ mod tests {
         };
         let commitment = pcs.commit(
             &[poly.clone().into(), poly_2.clone().into()],
-            &mut Blake2sTranscript::default(),
+            &mut prover_transcript,
         );
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
@@ -574,7 +574,7 @@ mod tests {
             &commitment,
             &[poly.clone().into(), poly_2.clone().into()],
             &eval,
-            &mut Blake2sTranscript::default(),
+            &mut prover_transcript,
         );
 
         let mut res = poly.fix_variable_ext(eval[0]);
