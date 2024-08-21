@@ -36,18 +36,28 @@ impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> Tensor
 
 impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> TensorPCS<F, T, E, LC> {
     fn encode_ext(&self, coeffs: &[E]) -> Vec<E> {
-        // Just unpack the coeffs to single field elements for now and then let the FFT take care
-        // of the repacking.
+        // We unpack the coeffs into E::DEGREE different vectors and compute low-degree extensions
+        // of each, after which we zip them back up into extension field elements.
         let unpacked = coeffs
             .iter()
-            .flat_map(|e| Into::<Vec<F>>::into(*e))
-            .collect::<Vec<F>>();
-        let encoded = self.code.encode(&unpacked);
+            .map(|e| Into::<Vec<F>>::into(*e))
+            .collect::<Vec<Vec<F>>>();
+        let unpacked = (0..E::DEGREE)
+            .map(|i| unpacked.iter().map(|el| el[i]).collect::<Vec<F>>())
+            .collect::<Vec<Vec<F>>>();
+        let mut encoded_columns = vec![];
+        for column in unpacked {
+            encoded_columns.push(self.code.encode(&column));
+        }
 
-        // Now repack them and return
-        encoded
-            .chunks(4)
-            .map(|chunk| E::new(chunk.to_vec()))
+        (0..encoded_columns[0].len())
+            .map(|i| {
+                let mut recoded_el = vec![];
+                (0..E::DEGREE).for_each(|j| {
+                    recoded_el.push(encoded_columns[j][i]);
+                });
+                E::new(recoded_el)
+            })
             .collect::<Vec<E>>()
     }
 }
@@ -274,26 +284,15 @@ where
         // Ensure that merkle paths and column evaluations are correct.
         for i in 0..self.n_test_queries {
             let index = transcript.draw_bits(enc_t_prime.len().ilog2() as usize);
-            println!(
-                "{}",
-                verify_val(
-                    &proof.1[i].1,
-                    &outer_expansion,
-                    enc_t_prime[index],
-                    &expansion,
-                )
-            );
-            println!("{}", comm.0.verify_path(&proof.1[i].0));
-            panic!()
-            // if !verify_val(
-            //     &proof.1[i].1,
-            //     &outer_expansion,
-            //     enc_t_prime[index],
-            //     &expansion,
-            // ) || !comm.0.verify_path(&proof.1[i].0)
-            // {
-            //     return false;
-            // }
+            if !verify_val(
+                &proof.1[i].1,
+                &outer_expansion,
+                enc_t_prime[index],
+                &expansion,
+            ) || !comm.0.verify_path(&proof.1[i].0)
+            {
+                return false;
+            }
         }
 
         // Ensure that t_prime times inner tensor expansion equals result.
