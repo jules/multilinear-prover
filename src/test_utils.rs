@@ -1,9 +1,7 @@
 use crate::{
     field::{ChallengeField, Field},
     polynomial::mle::MultilinearExtension,
-    transcript::Transcript,
 };
-use core::marker::PhantomData;
 use rand::Rng;
 
 // #[derive(Default)]

@@ -5,8 +5,6 @@
 // to the case at hand and for now I should be able to get away with something more rudimentary.
 // However, it should be useful for optimization purposes to take optimizations from it later in
 // order to reduce prover times (such as cache optimizations).
-//
-// Most of the code here is taken from Plonky3 https://github.com/Plonky3/Plonky3/blob/main/mersenne-31/.
 
 use super::FFT;
 use crate::field::{

@@ -101,7 +101,6 @@ impl MerkleTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{field::m31::M31, test_utils::rand_poly};
     use rand::Rng;
 
     const TREE_SIZE: usize = 1024;

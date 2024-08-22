@@ -52,7 +52,7 @@ impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> Tensor
 
         (0..encoded_columns[0].len())
             .map(|i| {
-                let mut recoded_el = vec![];
+                let mut recoded_el = Vec::with_capacity(E::DEGREE);
                 (0..E::DEGREE).for_each(|j| {
                     recoded_el.push(encoded_columns[j][i]);
                 });
@@ -93,7 +93,7 @@ where
             .par_iter()
             .map(|matrix| {
                 (0..row_size)
-                    .into_par_iter()
+                    .into_iter()
                     .map(|i| {
                         let mut hasher = Blake2s256::new();
                         (0..depth).for_each(|j| {
@@ -140,15 +140,18 @@ where
 
         // Calculate the t' for each t (poly) with the vector-matrix product.
         let mut t_primes = vec![vec![E::ZERO; log_size]; polys.len()];
-        t_primes.iter_mut().enumerate().for_each(|(i, t_prime)| {
-            outer_expansion.iter().enumerate().for_each(|(j, tensor)| {
-                t_prime.iter_mut().enumerate().for_each(|(k, entry)| {
-                    let mut tensor = tensor.clone();
-                    tensor.mul_base(&polys[i].eval(j * log_size + k));
-                    entry.add_assign(&tensor);
+        t_primes
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, t_prime)| {
+                outer_expansion.iter().enumerate().for_each(|(j, tensor)| {
+                    t_prime.iter_mut().enumerate().for_each(|(k, entry)| {
+                        let mut tensor = tensor.clone();
+                        tensor.mul_base(&polys[i].eval(j * log_size + k));
+                        entry.add_assign(&tensor);
+                    });
                 });
             });
-        });
 
         // Mix all t' into one using challenges.
         let n_challenges = comm.1.len().ilog2() as usize;
@@ -158,18 +161,16 @@ where
                 challenges.push(transcript.draw_challenge_ext());
             }
 
-            // TODO unoptimized
             let expansion = tensor_product_expansion(&challenges);
-            expansion.iter().enumerate().for_each(|(i, coeff)| {
-                t_primes[i].iter_mut().for_each(|e| e.mul_assign(coeff));
-            });
-
             t_primes[0]
                 .clone()
                 .into_par_iter()
                 .enumerate()
-                .map(|(i, e)| {
+                .map(|(i, mut e)| {
+                    e.mul_assign(&expansion[0]);
                     (1..t_primes.len()).fold(e, |mut acc, j| {
+                        let mut f = t_primes[j][i];
+                        f.mul_assign(&expansion[j]);
                         acc.add_assign(&t_primes[j][i]);
                         acc
                     })
@@ -204,7 +205,7 @@ where
                     // Extract a column per polynomial that we use in the proof.
                     let cols = comm
                         .1
-                        .iter()
+                        .par_iter()
                         .map(|matrix| {
                             (0..depth)
                                 .map(|i| matrix[i * row_size + index])
