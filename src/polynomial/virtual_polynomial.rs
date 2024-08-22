@@ -1,6 +1,7 @@
 use super::{MultilinearExtension, MultivariatePolynomial};
 use crate::field::{ChallengeField, Field};
 use core::cmp::max;
+use rayon::prelude::*;
 
 /// A representation of multiple polynomials mixed together with addition or multiplication.
 // NOTE no bookkeeping on how mixings were performed
@@ -97,7 +98,7 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
 
     fn fix_variable(&mut self, point: F) {
         self.constituents
-            .iter_mut()
+            .par_iter_mut()
             .for_each(|mle| mle.fix_variable(point));
     }
 
@@ -107,7 +108,7 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
             degree: self.degree,
             constituents: self
                 .constituents
-                .iter()
+                .par_iter()
                 .map(|mle| mle.fix_variable_ext(point))
                 .collect::<Vec<MultilinearExtension<E>>>(),
             evals: vec![],

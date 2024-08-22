@@ -6,6 +6,7 @@ use crate::{
     transcript::Transcript,
     univariate_utils::*,
 };
+use rayon::prelude::*;
 
 /// Possible errors coming from sumcheck verification.
 pub enum SumcheckError {
@@ -43,15 +44,16 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // collect the claimed sum from this step; this allows the verifier to reductively check all
     // other claimed sums from just a single field element.
     // So, in this first round, we unroll the logic and do it manually.
-    let mut evals_list = Vec::with_capacity(poly.constituents.len());
-    for p in &poly.constituents {
-        let evals = sumcheck_step(p, degree);
-        evals_list.push(evals);
-    }
-    let final_evals = (0..evals_list[0].len())
+    let individual_evals = poly
+        .constituents
+        .par_iter()
+        .map(|p| sumcheck_step(p, degree))
+        .collect::<Vec<Vec<F>>>();
+    let final_evals = (0..individual_evals[0].len())
+        .into_par_iter()
         .map(|i| {
-            (0..evals_list.len()).fold(F::ONE, |mut acc, j| {
-                acc.mul_assign(&evals_list[j][i]);
+            (0..individual_evals.len()).fold(F::ONE, |mut acc, j| {
+                acc.mul_assign(&individual_evals[j][i]);
                 acc
             })
         })
@@ -85,15 +87,16 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // For the remaining rounds (except for last), we always start by summing the evaluations,
     // interpolating the intermediate polynomial and then generating and fixing a new challenge.
     for _ in 0..(n_rounds - 1) {
-        let mut evals_list = Vec::with_capacity(poly_lifted.constituents.len());
-        for p in &poly_lifted.constituents {
-            let evals = sumcheck_step(p, degree);
-            evals_list.push(evals);
-        }
-        let final_evals = (0..evals_list[0].len())
+        let individual_evals = poly_lifted
+            .constituents
+            .par_iter()
+            .map(|p| sumcheck_step(p, degree))
+            .collect::<Vec<Vec<E>>>();
+        let final_evals = (0..individual_evals[0].len())
+            .into_par_iter()
             .map(|i| {
-                (0..evals_list.len()).fold(E::ONE, |mut acc, j| {
-                    acc.mul_assign(&evals_list[j][i]);
+                (0..individual_evals.len()).fold(E::ONE, |mut acc, j| {
+                    acc.mul_assign(&individual_evals[j][i]);
                     acc
                 })
             })
