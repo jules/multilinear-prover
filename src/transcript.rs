@@ -2,7 +2,7 @@ use crate::field::{ChallengeField, Field};
 use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
 
-pub trait Transcript<F: Field>: Send + Sync {
+pub trait Transcript<F: Field>: Default + Send + Sync {
     fn draw_challenge(&mut self) -> F;
     fn draw_challenge_ext<E: ChallengeField<F>>(&mut self) -> E;
     fn draw_bits(&mut self, bits: usize) -> usize;
@@ -65,7 +65,7 @@ where
         let output = self.output_hash();
         let mut v = output[..bytes + 1].to_vec();
 
-        // Flip redundant bits in last byte.
+        // Flip superfluous bits in last byte.
         v[bytes] &= (0..leftover).fold(0u8, |mut acc, i| {
             if i != 0 {
                 acc <<= 1;

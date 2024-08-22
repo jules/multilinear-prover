@@ -16,7 +16,7 @@ mod tests {
     };
 
     const POLY_SIZE_BITS: u32 = 20;
-    const ROOTS_OF_UNITY_BITS: usize = 13;
+    const ROOTS_OF_UNITY_BITS: usize = 11;
 
     fn prodcheck_test<
         F: Field,

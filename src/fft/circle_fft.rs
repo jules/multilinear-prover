@@ -50,6 +50,14 @@ impl FFT<M31> for CircleFFT {
         postprocess(&packed)
     }
 
+    fn extend(&self, coeffs: &[M31]) -> Vec<M31> {
+        let mut packed = preprocess(coeffs);
+        packed.resize(packed.len() << self.blowup_bits, M31_2::ZERO);
+        let packed_blowup_roots = preprocess(&self.blowup_roots);
+        fft(&mut packed, &packed_blowup_roots);
+        postprocess(&packed)
+    }
+
     fn ifft(&self, coeffs: &[M31]) -> Vec<M31> {
         let mut packed = preprocess(coeffs);
         let packed_roots = preprocess(&self.roots);
