@@ -5,7 +5,7 @@ use crate::{
     linear_code::LinearCode,
     merkle_tree::MerkleTree,
     pcs::PolynomialCommitmentScheme,
-    polynomial::{MultivariatePolynomial, VirtualPolynomial},
+    polynomial::{MultilinearExtension, MultivariatePolynomial},
     transcript::Transcript,
 };
 use blake2::{Blake2s256, Digest};
@@ -70,7 +70,7 @@ where
     type Commitment = (MerkleTree, Vec<Vec<F>>);
     type Proof = (Vec<E>, Vec<(Vec<[[u8; 32]; 2]>, Vec<Vec<F>>)>);
 
-    fn commit(&self, polys: &[VirtualPolynomial<F>], transcript: &mut T) -> Self::Commitment {
+    fn commit(&self, polys: &[MultilinearExtension<F>], transcript: &mut T) -> Self::Commitment {
         debug_assert!(polys.iter().all(|p| p.len() == polys[0].len()));
 
         // Turn the polys into matrices, then encode row-wise.
@@ -126,7 +126,7 @@ where
     fn prove(
         &self,
         comm: &Self::Commitment,
-        polys: &[VirtualPolynomial<F>],
+        polys: &[MultilinearExtension<F>],
         eval: &[E],
         transcript: &mut T,
     ) -> Self::Proof {

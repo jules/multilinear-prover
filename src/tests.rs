@@ -95,17 +95,23 @@ mod tests {
         let elapsed = std::time::Instant::now();
         println!("zerocheck {:?}", elapsed - now);
 
-        let virt = polys
-            .iter()
-            .map(|p| p.clone().into())
-            .collect::<Vec<VirtualPolynomial<F>>>();
-
         let now = std::time::Instant::now();
-        let commitment = pcs.commit(&virt, transcript_p);
+        let commitment = pcs.commit(&polys, transcript_p);
         let elapsed = std::time::Instant::now();
+        let evaluations = polys
+            .iter()
+            .map(|v| {
+                let mut v_lifted = v.fix_variable_ext(eval_point[0]);
+                for i in 1..20 {
+                    v_lifted.fix_variable(eval_point[i]);
+                }
+                assert!(v_lifted.evals.len() == 1);
+                v_lifted.evals[0]
+            })
+            .collect::<Vec<E>>();
         println!("commit {:?}", elapsed - now);
         let now = std::time::Instant::now();
-        let proof = pcs.prove(&commitment, &virt, &eval_point, transcript_p);
+        let proof = pcs.prove(&commitment, &polys, &eval_point, transcript_p);
         let elapsed = std::time::Instant::now();
         println!("prove {:?}", elapsed - now);
 
@@ -120,22 +126,16 @@ mod tests {
                 eq_lifted.fix_variable(*v);
             }
             assert!(eq_lifted.evals.len() == 1);
-            final_sum.mul_assign(&eq_lifted.evals[0]);
+            let mut final_value = evaluations.iter().fold(E::ONE, |mut acc, x| {
+                acc.mul_assign(x);
+                acc
+            });
+            final_value.mul_assign(&eq_lifted.evals[0]);
 
-            if final_sum != E::ZERO {
-                println!("dead");
+            if final_sum != final_value {
                 return false;
             }
-            // NOTE not doing this correctly when encoding loose columns atm, we need n final
-            // claims instead of just one
-            //pcs.verify(
-            //    &commitment,
-            //    &eval_point,
-            //    &[final_claim],
-            //    &proof,
-            //    transcript_v,
-            //)
-            true
+            pcs.verify(&commitment, &eval_point, &evaluations, &proof, transcript_v)
         } else {
             false
         }
