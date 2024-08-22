@@ -95,12 +95,22 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
         self.evals.truncate(new_len);
     }
 
+    fn fix_variable(&mut self, point: F) {
+        self.constituents
+            .iter_mut()
+            .for_each(|mle| mle.fix_variable(point));
+    }
+
     #[inline(always)]
     fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> VirtualPolynomial<E> {
         VirtualPolynomial::<E> {
             degree: self.degree,
-            constituents: vec![], // it's likely we don't need this on a lifted polynomial but TBD
-            evals: self.fix_variable_ext_internal(point),
+            constituents: self
+                .constituents
+                .iter()
+                .map(|mle| mle.fix_variable_ext(point))
+                .collect::<Vec<MultilinearExtension<E>>>(),
+            evals: vec![],
         }
     }
 }

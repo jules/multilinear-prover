@@ -2,7 +2,7 @@
 
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::{MultivariatePolynomial, VirtualPolynomial},
+    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
     transcript::Transcript,
     univariate_utils::*,
 };
@@ -43,10 +43,27 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // collect the claimed sum from this step; this allows the verifier to reductively check all
     // other claimed sums from just a single field element.
     // So, in this first round, we unroll the logic and do it manually.
-    let (coeffs, evals) = sumcheck_step(poly, degree, precomputed);
-    let mut claimed_sum = evals.0.clone();
-    claimed_sum.add_assign(&evals.1);
-    let coeffs = coeffs.into_iter().map(|c| E::from(c)).collect::<Vec<E>>();
+    let mut evals_list = Vec::with_capacity(poly.constituents.len());
+    for p in &poly.constituents {
+        let evals = sumcheck_step(p, degree);
+        evals_list.push(evals);
+    }
+    let final_evals = (0..evals_list[0].len())
+        .map(|i| {
+            (0..evals_list.len()).fold(F::ONE, |mut acc, j| {
+                acc.mul_assign(&evals_list[j][i]);
+                acc
+            })
+        })
+        .collect::<Vec<F>>();
+    let final_poly = lagrange_interpolation_with_precompute(&final_evals, precomputed);
+
+    let mut claimed_sum = final_evals[0].clone();
+    claimed_sum.add_assign(&final_evals[1]);
+    let coeffs = final_poly
+        .into_iter()
+        .map(|c| E::from(c))
+        .collect::<Vec<E>>();
     transcript.observe_witnesses(
         &coeffs
             .iter()
@@ -68,15 +85,28 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // For the remaining rounds (except for last), we always start by summing the evaluations,
     // interpolating the intermediate polynomial and then generating and fixing a new challenge.
     for _ in 0..(n_rounds - 1) {
-        let (coeffs, _) = sumcheck_step(&poly_lifted, degree, &precomputed);
+        let mut evals_list = Vec::with_capacity(poly_lifted.constituents.len());
+        for p in &poly_lifted.constituents {
+            let evals = sumcheck_step(p, degree);
+            evals_list.push(evals);
+        }
+        let final_evals = (0..evals_list[0].len())
+            .map(|i| {
+                (0..evals_list.len()).fold(E::ONE, |mut acc, j| {
+                    acc.mul_assign(&evals_list[j][i]);
+                    acc
+                })
+            })
+            .collect::<Vec<E>>();
+        let final_poly = lagrange_interpolation_with_precompute(&final_evals, &precomputed);
         transcript.observe_witnesses(
-            &coeffs
+            &final_poly
                 .iter()
                 .flat_map(|c| Into::<Vec<F>>::into(*c))
                 .collect::<Vec<F>>(),
         );
         let challenge = transcript.draw_challenge_ext::<E>();
-        proofs.push(coeffs);
+        proofs.push(final_poly);
         challenges.push(challenge);
 
         poly_lifted.fix_variable(challenge); // NOTE this isn't necessary on the very last step
@@ -92,15 +122,8 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     )
 }
 
-// In a sumcheck step, we sum the evaluations of a polynomial together and create `d` separate sums
-// (where `d` is the degree of the multivariate polynomial), which are then interpolated into
-// monomial coefficients.
 #[inline(always)]
-fn sumcheck_step<F: Field>(
-    poly: &VirtualPolynomial<F>,
-    degree: usize,
-    precomputed: &[Vec<F>],
-) -> (Vec<F>, (F, F)) {
+fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>, degree: usize) -> Vec<F> {
     let evals = poly.sum_evaluations();
 
     // Extrapolate any extra `degree - 1` coefficients.
@@ -120,8 +143,7 @@ fn sumcheck_step<F: Field>(
         extended_evals.push(a);
     }
 
-    let coeffs = lagrange_interpolation_with_precompute(&extended_evals, precomputed);
-    (coeffs, evals)
+    extended_evals
 }
 
 /// Runs the sumcheck verifier. On being given:
@@ -134,11 +156,13 @@ fn sumcheck_step<F: Field>(
 pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     proof: SumcheckProof<F, E>,
     transcript: &mut T,
-) -> Result<E, SumcheckError> {
+) -> Result<(E, Vec<E>), SumcheckError> {
     let SumcheckProof {
         proofs,
         claimed_sum,
     } = proof;
+
+    let mut challenge_point = Vec::with_capacity(proofs.len());
 
     // For each step we:
     // - Draw a challenge based on the polynomial coefficients (just as we do in the prover)
@@ -158,6 +182,7 @@ pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
             .collect::<Vec<F>>(),
     );
     let c = transcript.draw_challenge_ext();
+    challenge_point.push(c);
     let mut claimed_sum = univariate_eval(&proofs[0], c);
 
     // We performed the base field check so now we proceed into the extension field.
@@ -175,10 +200,11 @@ pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
                 .collect::<Vec<F>>(),
         );
         let c = transcript.draw_challenge_ext();
+        challenge_point.push(c);
         claimed_sum = univariate_eval(&coeffs, c);
     }
 
     // Output the final claimed sum. The verifier should use this to check against the proven
     // polynomial.
-    Ok(claimed_sum)
+    Ok((claimed_sum, challenge_point))
 }
