@@ -98,6 +98,7 @@ mod tests {
         let now = std::time::Instant::now();
         let commitment = pcs.commit(&polys, transcript_p);
         let elapsed = std::time::Instant::now();
+        println!("commit {:?}", elapsed - now);
         let evaluations = polys
             .iter()
             .map(|v| {
@@ -109,7 +110,6 @@ mod tests {
                 v_lifted.evals[0]
             })
             .collect::<Vec<E>>();
-        println!("commit {:?}", elapsed - now);
         let now = std::time::Instant::now();
         let proof = pcs.prove(&commitment, &polys, &eval_point, transcript_p);
         let elapsed = std::time::Instant::now();

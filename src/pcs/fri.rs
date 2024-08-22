@@ -10,7 +10,7 @@ use crate::{
 };
 use core::marker::PhantomData;
 
-pub struct FRIPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
+pub struct FRI<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
     _f_marker: PhantomData<F>,
     _t_marker: PhantomData<T>,
     _e_marker: PhantomData<E>,
@@ -18,7 +18,7 @@ pub struct FRIPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCo
 }
 
 impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>>
-    PolynomialCommitmentScheme<F, T, E> for FRIPCS<F, T, E, LC>
+    PolynomialCommitmentScheme<F, T, E> for FRI<F, T, E, LC>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
 {

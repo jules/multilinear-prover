@@ -1,3 +1,4 @@
+pub mod basefold;
 pub mod fri;
 pub mod tensor_pcs;
 

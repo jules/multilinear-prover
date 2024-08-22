@@ -162,15 +162,16 @@ where
             }
 
             let expansion = tensor_product_expansion(&challenges);
+            expansion.iter().enumerate().for_each(|(i, coeff)| {
+                t_primes[i].iter_mut().for_each(|e| e.mul_assign(coeff));
+            });
+
             t_primes[0]
                 .clone()
                 .into_par_iter()
                 .enumerate()
-                .map(|(i, mut e)| {
-                    e.mul_assign(&expansion[0]);
+                .map(|(i, e)| {
                     (1..t_primes.len()).fold(e, |mut acc, j| {
-                        let mut f = t_primes[j][i];
-                        f.mul_assign(&expansion[j]);
                         acc.add_assign(&t_primes[j][i]);
                         acc
                     })
@@ -562,10 +563,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
         };
-        let commitment = pcs.commit(
-            &[poly.clone().into(), poly_2.clone().into()],
-            &mut prover_transcript,
-        );
+        let commitment = pcs.commit(&[poly.clone(), poly_2.clone()], &mut prover_transcript);
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -573,7 +571,7 @@ mod tests {
         });
         let proof = pcs.prove(
             &commitment,
-            &[poly.clone().into(), poly_2.clone().into()],
+            &[poly.clone(), poly_2.clone()],
             &eval,
             &mut prover_transcript,
         );
