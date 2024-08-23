@@ -12,7 +12,7 @@ mod tests {
         },
         linear_code::ReedSolomonCode,
         pcs::TensorPCS,
-        polynomial::{MultilinearExtension, MultivariatePolynomial},
+        polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
         test_utils::rand_poly,
         transcript::Blake2sTranscript,
         univariate_utils::precompute_lagrange_coefficients,
@@ -48,9 +48,34 @@ mod tests {
 
     #[test]
     fn test_prove_verify_single_poly() {
-        let poly = MultilinearExtension::new(vec![M31::ZERO; 2u32.pow(20) as usize]);
+        let poly = MultilinearExtension::new(vec![M31::ZERO; 2u32.pow(POLY_SIZE_BITS) as usize]);
+
         let mut prover = make_prover(poly.degree());
         let proof = prover.prove(poly.into());
+
+        let mut verifier = make_verifier();
+        let accept = verifier
+            .verify(&proof)
+            .expect("should not panic after verifying a well-constructed proof");
+        assert!(accept);
+    }
+
+    #[test]
+    fn test_prove_verify_64_poly() {
+        let mut poly_set = (0..63)
+            .map(|_| rand_poly(POLY_SIZE_BITS))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        let zero_poly =
+            MultilinearExtension::new(vec![M31::ZERO; 2u32.pow(POLY_SIZE_BITS) as usize]);
+        poly_set.push(zero_poly);
+
+        let mut poly: VirtualPolynomial<M31> = poly_set[0].clone().into();
+        poly_set.iter().skip(1).for_each(|p| {
+            poly.mul_assign_mle(p);
+        });
+
+        let mut prover = make_prover(poly.degree());
+        let proof = prover.prove(poly);
 
         let mut verifier = make_verifier();
         let accept = verifier
