@@ -9,6 +9,7 @@
 #![cfg_attr(target_arch = "aarch64", feature(stdarch_aarch64_prefetch))]
 #![allow(refining_impl_trait)]
 
+mod arguments;
 mod fft;
 mod field;
 mod iop;
