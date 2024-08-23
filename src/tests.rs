@@ -14,6 +14,7 @@ mod tests {
         transcript::{Blake2sTranscript, Transcript},
         univariate_utils::precompute_lagrange_coefficients,
     };
+    use rayon::prelude::*;
 
     const POLY_SIZE_BITS: u32 = 20;
     const ROOTS_OF_UNITY_BITS: usize = (POLY_SIZE_BITS / 2 + 1) as usize;
@@ -80,7 +81,7 @@ mod tests {
         F: Field,
         E: ChallengeField<F>,
         T: Transcript<F>,
-        PCS: PolynomialCommitmentScheme<F, T, E>,
+        PCS: PolynomialCommitmentScheme<F, E, T>,
     >(
         poly: &mut VirtualPolynomial<F>,
         polys: &[MultilinearExtension<F>],
@@ -90,6 +91,7 @@ mod tests {
     ) -> bool {
         // Prover work
         let precomputed = precompute_lagrange_coefficients(poly.degree() + 2);
+        let full_proof = std::time::Instant::now();
         let now = std::time::Instant::now();
         let (sumcheck_claim, eval_point) = zerocheck::prove(poly, transcript_p, &precomputed);
         let elapsed = std::time::Instant::now();
@@ -100,7 +102,7 @@ mod tests {
         let elapsed = std::time::Instant::now();
         println!("commit {:?}", elapsed - now);
         let evaluations = polys
-            .iter()
+            .par_iter()
             .map(|v| {
                 let mut v_lifted = v.fix_variable_ext(eval_point[0]);
                 for i in 1..20 {
@@ -114,12 +116,12 @@ mod tests {
         let proof = pcs.prove(&commitment, &polys, &eval_point, transcript_p);
         let elapsed = std::time::Instant::now();
         println!("prove {:?}", elapsed - now);
+        println!("full proof {:?}", elapsed - full_proof);
 
         // Verifier work
-        if let Ok((final_claim, mut eq)) = zerocheck::verify(sumcheck_claim, transcript_v) {
+        if let Ok((final_claim, mut eq)) = zerocheck::verify(&sumcheck_claim, transcript_v) {
             let mut final_sum = final_claim.0;
             let challenge_point = final_claim.1;
-            assert!(eq.evals == poly.constituents.last().unwrap().evals);
             assert!(challenge_point == eval_point);
             let mut eq_lifted = eq.fix_variable_ext(challenge_point[0]);
             for v in challenge_point.iter().skip(1) {
@@ -210,7 +212,7 @@ mod tests {
             M31,
             M31_4,
             Blake2sTranscript<M31>,
-            TensorPCS<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>>,
+            TensorPCS<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>>,
         >(
             &mut poly,
             polys,

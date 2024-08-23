@@ -8,7 +8,7 @@ use crate::{
     transcript::Transcript,
 };
 
-pub trait PolynomialCommitmentScheme<F: Field, T: Transcript<F>, E: ChallengeField<F>> {
+pub trait PolynomialCommitmentScheme<F: Field, E: ChallengeField<F>, T: Transcript<F>> {
     type Commitment;
     type Proof;
 

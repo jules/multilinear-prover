@@ -14,27 +14,45 @@ use rayon::prelude::*;
 
 /// An implementation of Diamond and Posen's tensor polynomial commitment scheme, which is linear
 /// in prover complexity and has easily configurable soundness.
-pub struct TensorPCS<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
+pub struct TensorPCS<F: Field, E: ChallengeField<F>, T: Transcript<F>, LC: LinearCode<F>> {
     n_test_queries: usize,
     code: LC,
     _f_marker: PhantomData<F>,
-    _t_marker: PhantomData<T>,
     _e_marker: PhantomData<E>,
+    _t_marker: PhantomData<T>,
 }
 
-impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> TensorPCS<F, T, E, LC> {
+/// A commitment made with the tensor polynomial commitment scheme.
+pub struct TensorCommitment<F: Field> {
+    // Merkle tree where each leaf `n` is the hash of the column at `n` in each polynomial matrix.
+    tree: MerkleTree,
+    // Inputted polynomials reshaped as matrices and encoded row-wise with a linear code.
+    encoded_matrices: Vec<Vec<F>>,
+}
+
+/// An evaluation proof made with the tensor polynomial commitment scheme.
+pub struct TensorProof<F: Field, E: ChallengeField<F>> {
+    // The mixed product of all polynomials committed to.
+    t_prime: Vec<E>,
+    // Authentication paths for the query indices.
+    authentication_paths: Vec<Vec<[[u8; 32]; 2]>>,
+    // The columns of the encoded matrices at the query indices.
+    columns: Vec<Vec<Vec<F>>>,
+}
+
+impl<F: Field, E: ChallengeField<F>, T: Transcript<F>, LC: LinearCode<F>> TensorPCS<F, E, T, LC> {
     pub fn new(n_test_queries: usize, code: LC) -> Self {
         Self {
             n_test_queries,
             code,
             _f_marker: PhantomData::<F>,
-            _t_marker: PhantomData::<T>,
             _e_marker: PhantomData::<E>,
+            _t_marker: PhantomData::<T>,
         }
     }
 }
 
-impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> TensorPCS<F, T, E, LC> {
+impl<F: Field, E: ChallengeField<F>, T: Transcript<F>, LC: LinearCode<F>> TensorPCS<F, E, T, LC> {
     fn encode_ext(&self, coeffs: &[E]) -> Vec<E> {
         // We unpack the coeffs into E::DEGREE different vectors and compute low-degree extensions
         // of each, after which we zip them back up into extension field elements.
@@ -62,13 +80,13 @@ impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> Tensor
     }
 }
 
-impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>>
-    PolynomialCommitmentScheme<F, T, E> for TensorPCS<F, T, E, LC>
+impl<F: Field, E: ChallengeField<F>, T: Transcript<F>, LC: LinearCode<F>>
+    PolynomialCommitmentScheme<F, E, T> for TensorPCS<F, E, T, LC>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
 {
-    type Commitment = (MerkleTree, Vec<Vec<F>>);
-    type Proof = (Vec<E>, Vec<(Vec<[[u8; 32]; 2]>, Vec<Vec<F>>)>);
+    type Commitment = TensorCommitment<F>;
+    type Proof = TensorProof<F, E>;
 
     fn commit(&self, polys: &[MultilinearExtension<F>], transcript: &mut T) -> Self::Commitment {
         debug_assert!(polys.iter().all(|p| p.len() == polys[0].len()));
@@ -76,7 +94,7 @@ where
         // Turn the polys into matrices, then encode row-wise.
         // We take the next-power-of-two as the number of rows.
         let log_size = polys[0].len().isqrt().next_power_of_two();
-        let matrices = polys
+        let encoded_matrices = polys
             .par_iter()
             .map(|poly| {
                 poly.evals()
@@ -89,7 +107,7 @@ where
         // Create the column hashes for each matrix.
         let row_size = log_size << LC::BLOWUP_BITS;
         let depth = polys[0].len() / row_size;
-        let leaves = matrices
+        let leaves = encoded_matrices
             .par_iter()
             .map(|matrix| {
                 (0..row_size)
@@ -120,7 +138,10 @@ where
                 .collect::<Vec<[u8; 32]>>(),
         );
 
-        (tree, matrices)
+        TensorCommitment {
+            tree,
+            encoded_matrices,
+        }
     }
 
     fn prove(
@@ -154,7 +175,7 @@ where
             });
 
         // Mix all t' into one using challenges.
-        let n_challenges = comm.1.len().ilog2() as usize;
+        let n_challenges = comm.encoded_matrices.len().ilog2() as usize;
         let t_prime: Vec<E> = if n_challenges > 0 {
             let mut challenges = Vec::with_capacity(n_challenges);
             for _ in 0..n_challenges {
@@ -194,29 +215,35 @@ where
         // XXX figure out optimal n
         let row_size = (log_size << LC::BLOWUP_BITS) as usize;
         let row_size_bits = row_size.ilog2() as usize;
-        let depth = comm.1[0].len() / row_size;
-        (
+        let depth = comm.encoded_matrices[0].len() / row_size;
+        let (authentication_paths, columns): (Vec<Vec<[[u8; 32]; 2]>>, Vec<Vec<Vec<F>>>) = (0
+            ..self.n_test_queries)
+            .into_iter()
+            .map(|_| {
+                // Sample a random index for a given column.
+                let index = transcript.draw_bits(row_size_bits);
+                let path = comm.tree.get_proof(index);
+                // Extract a column per polynomial that we use in the proof.
+                let cols = comm
+                    .encoded_matrices
+                    .par_iter()
+                    .map(|matrix| {
+                        (0..depth)
+                            .map(|i| matrix[i * row_size + index])
+                            .collect::<Vec<F>>()
+                    })
+                    .collect::<Vec<Vec<F>>>();
+                (path, cols)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .unzip();
+
+        TensorProof {
             t_prime,
-            (0..self.n_test_queries)
-                .into_iter()
-                .map(|_| {
-                    // Sample a random index for a given column.
-                    let index = transcript.draw_bits(row_size_bits);
-                    let path = comm.0.get_proof(index);
-                    // Extract a column per polynomial that we use in the proof.
-                    let cols = comm
-                        .1
-                        .par_iter()
-                        .map(|matrix| {
-                            (0..depth)
-                                .map(|i| matrix[i * row_size + index])
-                                .collect::<Vec<F>>()
-                        })
-                        .collect::<Vec<Vec<F>>>();
-                    (path, cols)
-                })
-                .collect::<Vec<_>>(),
-        )
+            authentication_paths,
+            columns,
+        }
     }
 
     fn verify(
@@ -227,14 +254,14 @@ where
         proof: &Self::Proof,
         transcript: &mut T,
     ) -> bool {
-        let log_size = proof.0.len();
+        let log_size = proof.t_prime.len();
         let inner_expansion = tensor_product_expansion(&eval[..(log_size.ilog2() as usize)]);
         let outer_expansion = tensor_product_expansion(&eval[(log_size.ilog2() as usize)..]);
 
         // Observe commitment into transcript.
         transcript.observe_hashes(
             &comm
-                .0
+                .tree
                 .elements
                 .clone()
                 .into_iter()
@@ -243,7 +270,7 @@ where
         );
 
         // Create batch value.
-        let n_challenges = comm.1.len().ilog2() as usize;
+        let n_challenges = comm.encoded_matrices.len().ilog2() as usize;
         let mut expansion = vec![];
         let result = if n_challenges > 0 {
             let mut challenges: Vec<E> = Vec::with_capacity(n_challenges);
@@ -274,24 +301,24 @@ where
         // Enter t_prime into the transcript.
         transcript.observe_witnesses(
             &proof
-                .0
+                .t_prime
                 .iter()
                 .flat_map(|e| Into::<Vec<F>>::into(*e))
                 .collect::<Vec<F>>(),
         );
 
         // Encode t_prime.
-        let enc_t_prime = self.encode_ext(&proof.0);
+        let enc_t_prime = self.encode_ext(&proof.t_prime);
 
         // Ensure that merkle paths and column evaluations are correct.
         for i in 0..self.n_test_queries {
             let index = transcript.draw_bits(enc_t_prime.len().ilog2() as usize);
             if !verify_val(
-                &proof.1[i].1,
+                &proof.columns[i],
                 &outer_expansion,
                 enc_t_prime[index],
                 &expansion,
-            ) || !comm.0.verify_path(&proof.1[i].0)
+            ) || !comm.tree.verify_path(&proof.authentication_paths[i])
             {
                 return false;
             }
@@ -300,7 +327,7 @@ where
         // Ensure that t_prime times inner tensor expansion equals result.
         inner_expansion
             .iter()
-            .zip(proof.0.iter())
+            .zip(proof.t_prime.iter())
             .fold(E::ZERO, |mut acc, (t, e)| {
                 let mut t = t.clone();
                 t.mul_assign(e);
@@ -395,12 +422,12 @@ mod tests {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let mut prover_transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
 
@@ -434,12 +461,12 @@ mod tests {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let mut prover_transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
 
@@ -476,12 +503,12 @@ mod tests {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let mut prover_transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
 
@@ -516,12 +543,12 @@ mod tests {
         let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let mut prover_transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
 
@@ -556,12 +583,12 @@ mod tests {
         let poly_2 = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
 
         let mut prover_transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::<M31, Blake2sTranscript<M31>, M31_4, ReedSolomonCode<M31, CircleFFT>> {
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
             n_test_queries: N_QUERIES,
             code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
             _f_marker: PhantomData::<M31>,
-            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
             _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone(), poly_2.clone()], &mut prover_transcript);
 

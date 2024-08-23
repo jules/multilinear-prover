@@ -10,15 +10,15 @@ use crate::{
 };
 use core::marker::PhantomData;
 
-pub struct FRI<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>> {
+pub struct FRI<F: Field, E: ChallengeField<F>, T: Transcript<F>, LC: LinearCode<F>> {
     _f_marker: PhantomData<F>,
-    _t_marker: PhantomData<T>,
     _e_marker: PhantomData<E>,
+    _t_marker: PhantomData<T>,
     _lc_marker: PhantomData<LC>,
 }
 
-impl<F: Field, T: Transcript<F>, E: ChallengeField<F>, LC: LinearCode<F>>
-    PolynomialCommitmentScheme<F, T, E> for FRI<F, T, E, LC>
+impl<F: Field, E: ChallengeField<F>, T: Transcript<F>, LC: LinearCode<F>>
+    PolynomialCommitmentScheme<F, E, T> for FRI<F, E, T, LC>
 where
     [(); F::NUM_BYTES_IN_REPR]:,
 {

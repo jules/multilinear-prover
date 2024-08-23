@@ -1,7 +1,4 @@
-use crate::{
-    field::{ChallengeField, Field},
-    polynomial::mle::MultilinearExtension,
-};
+use crate::{field::Field, polynomial::mle::MultilinearExtension};
 use rand::Rng;
 
 // #[derive(Default)]
