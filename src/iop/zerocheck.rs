@@ -56,7 +56,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
 
 /// Runs the zerocheck verifier.
 pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
-    proof: SumcheckProof<F, E>,
+    proof: &SumcheckProof<F, E>,
     transcript: &mut T,
 ) -> Result<((E, Vec<E>), MultilinearExtension<F>), SumcheckError> {
     // Draw a list of challenges with which we create the `eq` polynomial.

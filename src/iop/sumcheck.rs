@@ -23,8 +23,8 @@ pub struct SumcheckProof<F: Field, E: ChallengeField<F>> {
 
 /// Runs the sumcheck prover. Given a list of polynomials and some abstracted transcript, we
 /// iteratively perform sumcheck reduction steps, in which we evaluate the polynomials in all of
-/// their variables. This also outputs the final evaluation of the polynomial itself so the prover
-/// can re-use it for commitment purposes.
+/// their variables. This also outputs the final evaluation point constructed by the prover so that
+/// we can re-use it for commitment purposes.
 ///
 /// Includes (naive) use of extension field challenges.
 // TODO(opt): https://eprint.iacr.org/2024/108.pdf,
@@ -44,21 +44,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // collect the claimed sum from this step; this allows the verifier to reductively check all
     // other claimed sums from just a single field element.
     // So, in this first round, we unroll the logic and do it manually.
-    let individual_evals = poly
-        .constituents
-        .par_iter()
-        .map(|p| sumcheck_step(p, degree))
-        .collect::<Vec<Vec<F>>>();
-    let final_evals = (0..individual_evals[0].len())
-        .into_par_iter()
-        .map(|i| {
-            (0..individual_evals.len()).fold(F::ONE, |mut acc, j| {
-                acc.mul_assign(&individual_evals[j][i]);
-                acc
-            })
-        })
-        .collect::<Vec<F>>();
-    let final_poly = lagrange_interpolation_with_precompute(&final_evals, precomputed);
+    let (final_poly, final_evals) = construct_round_poly(poly, degree, precomputed);
 
     let mut claimed_sum = final_evals[0].clone();
     claimed_sum.add_assign(&final_evals[1]);
@@ -87,21 +73,7 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // For the remaining rounds (except for last), we always start by summing the evaluations,
     // interpolating the intermediate polynomial and then generating and fixing a new challenge.
     for _ in 0..(n_rounds - 1) {
-        let individual_evals = poly_lifted
-            .constituents
-            .par_iter()
-            .map(|p| sumcheck_step(p, degree))
-            .collect::<Vec<Vec<E>>>();
-        let final_evals = (0..individual_evals[0].len())
-            .into_par_iter()
-            .map(|i| {
-                (0..individual_evals.len()).fold(E::ONE, |mut acc, j| {
-                    acc.mul_assign(&individual_evals[j][i]);
-                    acc
-                })
-            })
-            .collect::<Vec<E>>();
-        let final_poly = lagrange_interpolation_with_precompute(&final_evals, &precomputed);
+        let (final_poly, _) = construct_round_poly(&poly_lifted, degree, &precomputed);
         transcript.observe_witnesses(
             &final_poly
                 .iter()
@@ -123,6 +95,30 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
         },
         challenges,
     )
+}
+
+fn construct_round_poly<F: Field>(
+    poly: &VirtualPolynomial<F>,
+    degree: usize,
+    precomputed: &[Vec<F>],
+) -> (Vec<F>, Vec<F>) {
+    let individual_evals = poly
+        .constituents
+        .par_iter()
+        .map(|p| sumcheck_step(p, degree))
+        .collect::<Vec<Vec<F>>>();
+    let final_evals = (0..individual_evals[0].len())
+        .into_par_iter()
+        .map(|i| {
+            (0..individual_evals.len()).fold(F::ONE, |mut acc, j| {
+                acc.mul_assign(&individual_evals[j][i]);
+                acc
+            })
+        })
+        .collect::<Vec<F>>();
+    let final_poly = lagrange_interpolation_with_precompute(&final_evals, precomputed);
+
+    (final_poly, final_evals)
 }
 
 #[inline(always)]
@@ -157,7 +153,7 @@ fn sumcheck_step<F: Field>(poly: &MultilinearExtension<F>, degree: usize) -> Vec
 // TODO(opt): the highest coeff can be omitted and should simplify the verification procedure. ref:
 // angus gruen's paper https://eprint.iacr.org/2024/108.pdf
 pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
-    proof: SumcheckProof<F, E>,
+    proof: &SumcheckProof<F, E>,
     transcript: &mut T,
 ) -> Result<(E, Vec<E>), SumcheckError> {
     let SumcheckProof {
@@ -174,7 +170,7 @@ pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     let base_field_coeffs = proofs[0].iter().map(|c| c.real_coeff()).collect::<Vec<F>>();
     let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
     res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
-    if res != claimed_sum {
+    if res != *claimed_sum {
         return Err(SumcheckError::MismatchedSum);
     }
 
