@@ -1,3 +1,5 @@
+//! Provides an argument for zerocheck.
+
 pub mod prover;
 pub mod verifier;
 

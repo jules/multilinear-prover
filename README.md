@@ -8,3 +8,15 @@ Currently, code is written slightly naively and isn't written with an eye for he
 
 - A more efficient (especially cache-efficient) FFT
 - Costs incurred by clones and copies which happen during the IOP and any sort of extension field lifting
+
+## LEFT TODO
+
+- [ ] Prodcheck argument
+- [ ] Some lookup argument (likely best choice here is log-derivative)
+- [ ] Virtual poly toolkit that does more than just N degree mult
+- [ ] Basefold (half done implementation somewhere in boojum that i made and can probably port over)
+- [ ] FRI (just since i want to pit a few commitment schemes against each other in recursive settings - note that we may instead do this as a RISC-V program)
+- [ ] RISC-V circuit (likely doing one read one write per row, may have to exclude memory ops with this configuration for now and figure that out later)
+- [ ] FFT optimization
+
+And of course general cleanup and documentation

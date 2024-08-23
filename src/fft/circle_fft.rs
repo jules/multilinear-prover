@@ -1,11 +1,6 @@
 //! Mersenne-31 circle group FFT. Used in a variety of polynomial commitment schemes for this
 //! project.
 
-// At the moment, I'm foregoing using the AIR compiler work on this - it seems highly specialized
-// to the case at hand and for now I should be able to get away with something more rudimentary.
-// However, it should be useful for optimization purposes to take optimizations from it later in
-// order to reduce prover times (such as cache optimizations).
-
 use super::FFT;
 use crate::field::{
     m31::{complex::M31_2, M31},
