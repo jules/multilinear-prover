@@ -1,6 +1,7 @@
 pub mod basefold;
 pub mod fri;
 pub mod tensor_pcs;
+pub use tensor_pcs::TensorPCS;
 
 use crate::{
     field::{ChallengeField, Field},

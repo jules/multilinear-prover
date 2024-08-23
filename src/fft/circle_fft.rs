@@ -222,7 +222,7 @@ mod tests {
     fn test_fft_roundtrip() {
         let order = 19;
         let roots = precompute_roots(order);
-        let poly = rand_poly::<M31>(2u32.pow(20) as usize);
+        let poly = rand_poly::<M31>(20);
         let mut preprocessed = preprocess(&poly.evals);
         fft(&mut preprocessed, &roots);
         ifft(&mut preprocessed, &roots);
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn test_ifft_roundtrip() {
         let roots = precompute_roots(19);
-        let poly = rand_poly::<M31>(2u32.pow(20) as usize);
+        let poly = rand_poly::<M31>(20);
         let mut preprocessed = preprocess(&poly.evals);
         fft(&mut preprocessed, &roots);
         ifft(&mut preprocessed, &roots);
@@ -271,7 +271,7 @@ mod tests {
     fn test_lde() {
         let roots = precompute_roots(3);
         let blowup_roots = precompute_roots(4);
-        let poly = rand_poly::<M31>(2u32.pow(4) as usize);
+        let poly = rand_poly::<M31>(4);
         let mut preprocessed = preprocess(&poly.evals);
         ifft(&mut preprocessed, &roots);
         preprocessed.resize(preprocessed.len() << 1, M31_2::ZERO);

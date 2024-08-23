@@ -259,9 +259,7 @@ mod tests {
 
     #[test]
     fn tensor_pcs_1_poly_test_zerocheck_fail() {
-        assert!(!tensor_pcs_zerocheck(&[rand_poly(
-            2u32.pow(POLY_SIZE_BITS) as usize
-        )]));
+        assert!(!tensor_pcs_zerocheck(&[rand_poly(POLY_SIZE_BITS)]));
     }
 
     //#[test]
@@ -285,7 +283,7 @@ mod tests {
         // Because we currently stand-in the constraint poly for a entrywise mult between all polys, we
         // can create a successful zerocheck by inputting one zero polynomial.
         let mut polys = (0..63)
-            .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
+            .map(|_| rand_poly(POLY_SIZE_BITS))
             .collect::<Vec<MultilinearExtension<M31>>>();
         polys.push(MultilinearExtension::new(vec![
             M31::ZERO;
@@ -301,7 +299,7 @@ mod tests {
         // Because we currently stand-in the constraint poly for a entrywise mult between all polys, we
         // can create a successful zerocheck by inputting one zero polynomial.
         let mut polys = (0..255)
-            .map(|_| rand_poly(2u32.pow(POLY_SIZE_BITS) as usize))
+            .map(|_| rand_poly(POLY_SIZE_BITS))
             .collect::<Vec<MultilinearExtension<M31>>>();
         polys.push(MultilinearExtension::new(vec![
             M31::ZERO;

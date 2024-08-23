@@ -23,8 +23,8 @@ use rand::Rng;
 //     fn observe_witnesses(&mut self, _witness: &[F]) {}
 // }
 
-pub fn rand_poly<F: Field>(order: usize) -> MultilinearExtension<F> {
-    let mut evals = vec![F::default(); order];
+pub fn rand_poly<F: Field>(order_bits: u32) -> MultilinearExtension<F> {
+    let mut evals = vec![F::default(); 2u32.pow(order_bits) as usize];
     evals
         .iter_mut()
         .for_each(|e| *e = F::from_usize(rand::thread_rng().gen::<usize>()));

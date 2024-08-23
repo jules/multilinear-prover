@@ -80,7 +80,6 @@ impl<
             .take(n_polys)
             .map(|p| {
                 let mut p_lifted = p.fix_variable_ext(eval_point[0]);
-
                 (1..eval_point.len()).for_each(|i| {
                     p_lifted.fix_variable(eval_point[i]);
                 });
@@ -93,6 +92,7 @@ impl<
         let commitment = self
             .pcs
             .commit(&poly.constituents[..n_polys], &mut self.transcript);
+
         let proof = self.pcs.prove(
             &commitment,
             &poly.constituents[..n_polys],

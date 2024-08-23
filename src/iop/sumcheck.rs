@@ -9,6 +9,7 @@ use crate::{
 use rayon::prelude::*;
 
 /// Possible errors coming from sumcheck verification.
+#[derive(Debug)]
 pub enum SumcheckError {
     MismatchedSum,
 }

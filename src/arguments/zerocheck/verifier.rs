@@ -64,7 +64,7 @@ impl<
         // Check that the value holds w.r.t. the sumcheck verifier, and also ensure that all given
         // polynomial evaluations are actually correct w.r.t. the given commitment and evaluation
         // proof.
-        Ok(final_sum != final_value
+        Ok(final_sum == final_value
             && self.pcs.verify(
                 &proof.commitment,
                 &eval_point,

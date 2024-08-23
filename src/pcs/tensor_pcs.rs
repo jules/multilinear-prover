@@ -414,12 +414,12 @@ mod tests {
     use rand::Rng;
 
     const POLY_SIZE_BITS: u32 = 20;
-    const ROOTS_OF_UNITY_BITS: usize = 12;
+    const ROOTS_OF_UNITY_BITS: usize = (POLY_SIZE_BITS / 2 + 1) as usize;
     const N_QUERIES: usize = 4;
 
     #[test]
     fn commit_prove_verify_single_poly() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let poly = rand_poly(POLY_SIZE_BITS);
 
         let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn commit_prove_verify_single_poly_wrong_eval() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let poly = rand_poly(POLY_SIZE_BITS);
 
         let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
@@ -500,7 +500,7 @@ mod tests {
 
     #[test]
     fn commit_prove_verify_single_poly_wrong_commitment() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let poly = rand_poly(POLY_SIZE_BITS);
 
         let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
@@ -516,7 +516,7 @@ mod tests {
         eval.iter_mut().for_each(|e| {
             *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
         });
-        let fake_poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let fake_poly = rand_poly(POLY_SIZE_BITS);
         let fake_commitment = pcs.commit(&[fake_poly.clone().into()], &mut prover_transcript);
         let proof = pcs.prove(
             &fake_commitment,
@@ -540,7 +540,7 @@ mod tests {
 
     #[test]
     fn commit_prove_verify_single_poly_wrong_proof() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let poly = rand_poly(POLY_SIZE_BITS);
 
         let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
@@ -556,7 +556,7 @@ mod tests {
         eval.iter_mut().for_each(|e| {
             *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
         });
-        let fake_poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let fake_poly = rand_poly(POLY_SIZE_BITS);
         let proof = pcs.prove(
             &commitment,
             &[fake_poly.clone().into()],
@@ -579,8 +579,8 @@ mod tests {
 
     #[test]
     fn commit_prove_verify_2_poly() {
-        let poly = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
-        let poly_2 = rand_poly(2u32.pow(POLY_SIZE_BITS) as usize);
+        let poly = rand_poly(POLY_SIZE_BITS);
+        let poly_2 = rand_poly(POLY_SIZE_BITS);
 
         let mut prover_transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
