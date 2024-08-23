@@ -107,6 +107,7 @@ fn construct_round_poly<F: Field>(
         .par_iter()
         .map(|p| sumcheck_step(p, degree))
         .collect::<Vec<Vec<F>>>();
+    // XXX virtual polynomial constraint should replace this N degree mult
     let final_evals = (0..individual_evals[0].len())
         .into_par_iter()
         .map(|i| {
