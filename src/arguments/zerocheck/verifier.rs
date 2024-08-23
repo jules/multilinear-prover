@@ -74,7 +74,7 @@ impl<
             ))
     }
 
-    /// We implement a method to relinquish the transcript out of the prover after it is finished.
+    /// We implement a method to relinquish the transcript out of the verifier after it is finished.
     /// This method will consume the prover and leave the transcript to be used for the next
     /// argument.
     pub fn relinquish_transcript(mut self) -> T {
