@@ -18,5 +18,6 @@ Currently, code is written slightly naively and isn't written with an eye for he
 - [ ] FRI (just since i want to pit a few commitment schemes against each other in recursive settings - note that we may instead do this as a RISC-V program)
 - [ ] RISC-V circuit (likely doing one read one write per row, may have to exclude memory ops with this configuration for now and figure that out later)
 - [ ] FFT optimization
+- [ ] Optimizations to zerocheck IOP (papers already in the comments)
 
 And of course general cleanup and documentation
