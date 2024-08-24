@@ -28,7 +28,7 @@ pub struct ProdcheckProof<
     pub zerocheck_proof: ZerocheckProof<F, E, T, PCS>,
     pub commitment: PCS::Commitment,
     pub proof: PCS::Proof,
-    pub num_vars: usize,
+    pub num_vars: usize, // actually, this can come from a verifier key that gives circuit length
 }
 
 impl<
