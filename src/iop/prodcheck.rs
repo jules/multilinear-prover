@@ -1,4 +1,5 @@
-//! Product check IOP
+//! Product check IOP utils. This module does not include any clear prover or verifier since this
+//! should be taken from [`zerocheck`].
 
 use crate::{
     field::{ChallengeField, Field},
@@ -7,25 +8,14 @@ use crate::{
     transcript::Transcript,
 };
 
-/// Performs a 'product-check', which proves that one set of polynomials equals another, invariant
-/// of their sorting. Essentially, this is done by multiplying the first set together, and then the
-/// second set, after which the quotient is computed. The sets equal each other iff s1 / s2 = 1.
-/// Unfortunately, checking this isn't quite as simple - much like with a naive sumcheck, a
-/// malicious prover can ensure that the elements are set so that the product of s1 does not equal
-/// the product of s2, but becomes equal modulo the field order. Therefore, we need to perform some
-/// extra trickery to make the claim sound.
-///
-/// Note that we don't need a verifier here as the evaluation proof is done outside of the iop
-/// module and the proof returned can be verified with the [`zerocheck`] verifier.
-pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
+/// Computes the fractional polynomial, declared as:
+/// (unsorted_0 * unsorted_1 * ... * unsorted_n) / (sorted_0 * sorted_1 * .. * sorted_n)
+pub fn compute_frac_poly<F: Field>(
     unsorted: &[MultilinearExtension<F>],
     sorted: &[MultilinearExtension<F>],
-    transcript: &mut T,
-    precomputed: &[Vec<F>],
 ) -> (
-    SumcheckProof<F, E>,
-    Vec<E>,
-    VirtualPolynomial<F>,
+    MultilinearExtension<F>,
+    MultilinearExtension<F>,
     MultilinearExtension<F>,
 ) {
     debug_assert!(unsorted.len() == sorted.len());
@@ -39,7 +29,6 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
         .all(|p| p.num_vars() == sorted[0].num_vars()));
     debug_assert!(unsorted[0].num_vars() == sorted[0].num_vars());
 
-    // Compute the fractional polynomial.
     let mut nominator = unsorted[0].clone();
     unsorted[1..].iter().for_each(|p| {
         nominator
@@ -80,8 +69,12 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
             .collect::<Vec<F>>(),
     );
 
-    // Compute product polynomial. We want to create a polynomial f(X) in \mu + 1 vars where f(x,
-    // 0) = frac(x) and f(x, 1) = f(0, x) * f(1, x).
+    (frac_poly, nominator, denominator)
+}
+
+/// Computes the 'product polynomial'. We want to create a polynomial f(X) in \mu + 1 vars where f(x,
+/// 0) = frac(x) and f(x, 1) = f(0, x) * f(1, x).
+pub fn compute_v<F: Field>(frac_poly: MultilinearExtension<F>) -> MultilinearExtension<F> {
     let mut prod_evals = Vec::with_capacity(frac_poly.len() * 2);
     frac_poly.evals.iter().for_each(|e| prod_evals.push(*e));
     for i in 0..(prod_evals.len() - 1) {
@@ -93,10 +86,18 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     // Last evaluation should be zero.
     prod_evals.push(F::ZERO);
 
-    let prod_poly = MultilinearExtension::new(prod_evals);
+    MultilinearExtension::new(prod_evals)
+}
 
+/// Computes the zerocheck polynomial for the prodcheck.
+pub fn compute_h<F: Field>(
+    prod_poly: &MultilinearExtension<F>,
+    nominator: MultilinearExtension<F>,
+    denominator: MultilinearExtension<F>,
+) -> VirtualPolynomial<F> {
     // Now we create the zerocheck polynomial and run a zerocheck on it.
-    let upper_half_prod = MultilinearExtension::new(prod_poly.evals[frac_poly.len()..].to_vec());
+    let upper_half_prod =
+        MultilinearExtension::new(prod_poly.evals[prod_poly.len() / 2..].to_vec());
     let mut a = VirtualPolynomial::from(nominator.merge(upper_half_prod));
 
     let evens = MultilinearExtension::new(
@@ -109,7 +110,8 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     );
     let mut b = VirtualPolynomial::from(denominator.merge(evens));
 
-    let lower_half_prod = MultilinearExtension::new(prod_poly.evals[..frac_poly.len()].to_vec());
+    let lower_half_prod =
+        MultilinearExtension::new(prod_poly.evals[..prod_poly.len() / 2].to_vec());
     let odds = MultilinearExtension::new(
         prod_poly
             .evals
@@ -124,7 +126,5 @@ pub fn prove<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     b.mul_assign(&c);
     b.evals.iter_mut().for_each(|e| e.negate());
     a.add_assign(&b);
-
-    let (proof, evals) = zerocheck::prove(&mut a, transcript, precomputed);
-    (proof, evals, a, prod_poly)
+    a
 }

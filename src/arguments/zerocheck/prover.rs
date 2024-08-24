@@ -22,8 +22,8 @@ pub struct ZerocheckProver<
     PCS: PolynomialCommitmentScheme<F, E, T>,
 > {
     lagrange_coefficients: Vec<Vec<F>>,
-    transcript: T,
-    pcs: PCS,
+    pub transcript: T,
+    pub pcs: PCS,
     _e_marker: PhantomData<E>,
 }
 

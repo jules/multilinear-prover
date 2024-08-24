@@ -63,6 +63,7 @@ pub fn verify<F: Field, E: ChallengeField<F>, T: Transcript<F>>(
     let mut c = vec![F::ZERO; proof.proofs.len()];
     c.iter_mut().for_each(|e| *e = transcript.draw_challenge());
 
+    // TODO: eq eval and not just recreating it entirely.
     // For the purposes of creating `eq`, we will also create a vector of `1 - challenge`.
     let one_minus_c = c
         .iter()

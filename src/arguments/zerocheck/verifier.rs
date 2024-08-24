@@ -10,14 +10,16 @@ use crate::{
 };
 use core::marker::PhantomData;
 
+/// A zerocheck verifier, which, on being given a [`ZerocheckProof`], can check correctness of the
+/// entire argument (including IOP and PCS elements).
 pub struct ZerocheckVerifier<
     F: Field,
     E: ChallengeField<F>,
     T: Transcript<F>,
     PCS: PolynomialCommitmentScheme<F, E, T>,
 > {
-    transcript: T,
-    pcs: PCS,
+    pub transcript: T,
+    pub pcs: PCS,
     _f_marker: PhantomData<F>,
     _e_marker: PhantomData<E>,
 }
@@ -42,7 +44,6 @@ impl<
     /// Run the zerocheck argument verifier for a given [`ZerocheckProof`].
     pub fn verify(&mut self, proof: &ZerocheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
         // First, we run the IOP verifier and extract the final claim and the evaluation of eq.
-        // TODO: eq eval and not just recreating it entirely.
         let ((final_sum, eval_point), eq) =
             zerocheck::verify(&proof.zerocheck_proof, &mut self.transcript)?;
 

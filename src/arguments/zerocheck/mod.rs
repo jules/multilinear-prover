@@ -31,6 +31,8 @@ mod tests {
         Blake2sTranscript<M31>,
         TensorPCS<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>>,
     > {
+        // We do degree + 2 here since we need degree + 1 for the sumcheck and one extra for the
+        // multiplication with eq.
         let lagrange_coefficients = precompute_lagrange_coefficients(degree + 2);
         let transcript = Blake2sTranscript::default();
         let pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
