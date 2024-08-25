@@ -65,4 +65,19 @@ mod tests {
             .expect("should not panic after verifying a well-constructed proof");
         assert!(accept);
     }
+
+    #[test]
+    fn test_prove_verify_faulty_product() {
+        let poly = rand_poly(POLY_SIZE_BITS);
+        let poly_sorted = rand_poly(POLY_SIZE_BITS);
+
+        let mut prover = make_prover(poly.degree());
+        let proof = prover.prove(&[poly], &[poly_sorted]);
+
+        let mut verifier = make_verifier();
+        let accept = verifier
+            .verify(&proof)
+            .expect("should not panic after verifying a well-constructed proof");
+        assert!(!accept);
+    }
 }
