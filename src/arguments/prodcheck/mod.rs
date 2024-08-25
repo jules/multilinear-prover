@@ -80,4 +80,41 @@ mod tests {
             .expect("should not panic after verifying a well-constructed proof");
         assert!(!accept);
     }
+
+    #[test]
+    fn test_prove_verify_4_poly() {
+        let unsorted_polys = (0..4)
+            .map(|_| rand_poly(POLY_SIZE_BITS))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        let mut sorted_polys = unsorted_polys.clone();
+        sorted_polys.iter_mut().for_each(|p| p.evals.sort());
+
+        let mut prover = make_prover(1);
+        let proof = prover.prove(&unsorted_polys, &sorted_polys);
+
+        let mut verifier = make_verifier();
+        let accept = verifier
+            .verify(&proof)
+            .expect("should not panic after verifying a well-constructed proof");
+        assert!(accept);
+    }
+
+    #[test]
+    fn test_prove_verify_4_poly_faulty() {
+        let unsorted_polys = (0..4)
+            .map(|_| rand_poly(POLY_SIZE_BITS))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        let mut sorted_polys = unsorted_polys.clone();
+        sorted_polys[0] = rand_poly(POLY_SIZE_BITS);
+        sorted_polys.iter_mut().for_each(|p| p.evals.sort());
+
+        let mut prover = make_prover(1);
+        let proof = prover.prove(&unsorted_polys, &sorted_polys);
+
+        let mut verifier = make_verifier();
+        let accept = verifier
+            .verify(&proof)
+            .expect("should not panic after verifying a well-constructed proof");
+        assert!(!accept);
+    }
 }
