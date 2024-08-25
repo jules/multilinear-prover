@@ -6,6 +6,7 @@ use crate::{
     iop::{sumcheck::SumcheckError, zerocheck},
     pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
+    univariate_utils::univariate_eval,
 };
 use core::marker::PhantomData;
 
@@ -42,7 +43,18 @@ impl<
 
     /// Run the zerocheck argument verifier for a given [`ZerocheckProof`].
     pub fn verify(&mut self, proof: &ZerocheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
-        // First, we run the IOP verifier and extract the final claim and the evaluation of eq.
+        // First off, we need to check that the initial claimed sum is indeed zero.
+        let base_field_coeffs = proof.zerocheck_proof.proofs[0]
+            .iter()
+            .map(|c| c.real_coeff())
+            .collect::<Vec<F>>();
+        let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
+        res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
+        if res != F::ZERO {
+            return Ok(false);
+        }
+
+        // We run the IOP verifier and extract the final claim and the evaluation of eq.
         let ((final_sum, eval_point), eq) =
             zerocheck::verify(&proof.zerocheck_proof, &mut self.transcript)?;
 
@@ -84,8 +96,7 @@ impl<
         // Check that the value holds w.r.t. the sumcheck verifier, and also ensure that all given
         // polynomial evaluations are actually correct w.r.t. the given commitment and evaluation
         // proof.
-        Ok(final_sum == E::ZERO
-            && final_sum == final_value
+        Ok(final_sum == final_value
             && self.pcs.verify(
                 &proof.commitment,
                 &eval_point,

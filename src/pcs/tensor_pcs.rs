@@ -175,14 +175,14 @@ where
             });
 
         // Mix all t' into one using challenges.
-        let n_challenges = comm.encoded_matrices.len().ilog2() as usize;
+        let n_challenges = (comm.encoded_matrices.len() as f32).log2().ceil() as usize;
         let t_prime: Vec<E> = if n_challenges > 0 {
             let mut challenges = Vec::with_capacity(n_challenges);
             for _ in 0..n_challenges {
                 challenges.push(transcript.draw_challenge_ext());
             }
 
-            let expansion = tensor_product_expansion(&challenges);
+            let expansion = tensor_product_expansion(&challenges)[..t_primes.len()].to_vec();
             expansion.iter().enumerate().for_each(|(i, coeff)| {
                 t_primes[i].iter_mut().for_each(|e| e.mul_assign(coeff));
             });
@@ -270,7 +270,7 @@ where
         );
 
         // Create batch value.
-        let n_challenges = comm.encoded_matrices.len().ilog2() as usize;
+        let n_challenges = (comm.encoded_matrices.len() as f32).log2().ceil() as usize;
         let mut expansion = vec![];
         let result = if n_challenges > 0 {
             let mut challenges: Vec<E> = Vec::with_capacity(n_challenges);
@@ -278,7 +278,7 @@ where
                 challenges.push(transcript.draw_challenge_ext());
             }
 
-            expansion = tensor_product_expansion(&challenges);
+            expansion = tensor_product_expansion(&challenges)[..results.len()].to_vec();
 
             // Return the inner product of the expanded challenges and the results.
             expansion
@@ -615,6 +615,57 @@ mod tests {
             &commitment,
             &eval,
             &[res.evals[0], res_2.evals[0]],
+            &proof,
+            &mut Blake2sTranscript::default()
+        ));
+    }
+
+    #[test]
+    fn commit_prove_verify_3_poly() {
+        let poly = rand_poly(POLY_SIZE_BITS);
+        let poly_2 = rand_poly(POLY_SIZE_BITS);
+        let poly_3 = rand_poly(POLY_SIZE_BITS);
+
+        let mut prover_transcript = Blake2sTranscript::default();
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
+            _f_marker: PhantomData::<M31>,
+            _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
+        };
+        let commitment = pcs.commit(
+            &[poly.clone(), poly_2.clone(), poly_3.clone()],
+            &mut prover_transcript,
+        );
+
+        let mut eval = vec![M31_4::default(); poly.num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        let proof = pcs.prove(
+            &commitment,
+            &[poly.clone(), poly_2.clone(), poly_3.clone()],
+            &eval,
+            &mut prover_transcript,
+        );
+
+        let mut res = poly.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res.fix_variable(*e);
+        });
+        let mut res_2 = poly_2.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res_2.fix_variable(*e);
+        });
+        let mut res_3 = poly_3.fix_variable_ext(eval[0]);
+        eval.iter().skip(1).for_each(|e| {
+            res_3.fix_variable(*e);
+        });
+        assert!(pcs.verify(
+            &commitment,
+            &eval,
+            &[res.evals[0], res_2.evals[0], res_3.evals[0]],
             &proof,
             &mut Blake2sTranscript::default()
         ));
