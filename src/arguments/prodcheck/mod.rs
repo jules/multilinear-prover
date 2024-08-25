@@ -8,13 +8,10 @@ mod tests {
     use super::{prover::ProdcheckProver, verifier::ProdcheckVerifier};
     use crate::{
         fft::CircleFFT,
-        field::{
-            m31::{quartic::M31_4, M31},
-            Field,
-        },
+        field::m31::{quartic::M31_4, M31},
         linear_code::ReedSolomonCode,
         pcs::TensorPCS,
-        polynomial::{MultilinearExtension, VirtualPolynomial},
+        polynomial::MultilinearExtension,
         test_utils::rand_poly,
         transcript::Blake2sTranscript,
         univariate_utils::precompute_lagrange_coefficients,

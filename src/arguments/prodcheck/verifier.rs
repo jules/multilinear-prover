@@ -4,7 +4,7 @@ use super::prover::ProdcheckProof;
 use crate::{
     arguments::zerocheck::verifier::ZerocheckVerifier,
     field::{ChallengeField, Field},
-    iop::{sumcheck::SumcheckError, zerocheck},
+    iop::sumcheck::SumcheckError,
     pcs::PolynomialCommitmentScheme,
     transcript::Transcript,
 };
