@@ -4,7 +4,7 @@ use crate::{
     field::{ChallengeField, Field},
     iop::{sumcheck::SumcheckProof, zerocheck},
     pcs::PolynomialCommitmentScheme,
-    polynomial::{MultivariatePolynomial, VirtualPolynomial},
+    polynomial::VirtualPolynomial,
     transcript::Transcript,
 };
 use core::marker::PhantomData;

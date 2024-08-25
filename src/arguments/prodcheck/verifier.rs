@@ -6,7 +6,6 @@ use crate::{
     field::{ChallengeField, Field},
     iop::{sumcheck::SumcheckError, zerocheck},
     pcs::PolynomialCommitmentScheme,
-    polynomial::MultivariatePolynomial,
     transcript::Transcript,
 };
 

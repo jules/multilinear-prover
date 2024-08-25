@@ -3,12 +3,11 @@
 use crate::{
     arguments::zerocheck::prover::{ZerocheckProof, ZerocheckProver},
     field::{ChallengeField, Field},
-    iop::{prodcheck, sumcheck::SumcheckProof},
+    iop::prodcheck,
     pcs::PolynomialCommitmentScheme,
-    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
+    polynomial::MultilinearExtension,
     transcript::Transcript,
 };
-use rayon::prelude::*;
 
 pub struct ProdcheckProver<
     F: Field,

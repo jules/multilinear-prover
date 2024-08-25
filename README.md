@@ -11,7 +11,7 @@ Currently, code is written slightly naively and isn't written with an eye for he
 
 ## LEFT TODO
 
-- [ ] Prodcheck argument
+- [x] Prodcheck argument
 - [ ] Some lookup argument (likely best choice here is log-derivative)
 - [ ] Virtual poly toolkit that does more than just N degree mult
 - [ ] Basefold (half done implementation somewhere in boojum that i made and can probably port over)
@@ -21,3 +21,5 @@ Currently, code is written slightly naively and isn't written with an eye for he
 - [ ] Optimizations to zerocheck IOP (papers already in the comments)
 
 And of course general cleanup and documentation
+
+Also thinking about reusing columns between arguments and saving on commitment costs. but it means we cant batch commit certain columns which might incur more cost - though with a linear commitment scheme it should be fine. bench to be sure

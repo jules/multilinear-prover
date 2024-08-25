@@ -1,4 +1,3 @@
-use super::MultivariatePolynomial;
 use crate::field::{ChallengeField, Field};
 
 /// A multilinear polynomial represented in the Lagrange basis.
@@ -24,37 +23,66 @@ impl<F: Field> MultilinearExtension<F> {
         }
         Self::new(new_evals)
     }
-}
 
-impl<F: Field> MultivariatePolynomial<F> for MultilinearExtension<F> {
     #[inline(always)]
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.evals.len()
     }
 
     #[inline(always)]
-    fn evals(&self) -> &[F] {
-        &self.evals
+    pub fn num_vars(&self) -> usize {
+        self.len().ilog2() as usize
     }
 
     #[inline(always)]
-    fn eval(&self, index: usize) -> F {
-        self.evals[index]
+    pub fn degree(&self) -> usize {
+        1
     }
 
-    #[inline(always)]
-    fn eval_mut(&mut self, index: usize) -> &mut F {
-        &mut self.evals[index]
+    /// Sets the first variable of the polynomial to `point`. Used for fixing sumcheck challenges
+    /// into the polynomial.
+    pub fn fix_variable(&mut self, point: F) {
+        // TODO: par
+        // TODO: binius highly optimizes this
+        for i in 0..(1 << (self.num_vars() - 1)) {
+            let mut s = self.evals[(i << 1) + 1];
+            s.sub_assign(&self.evals[i << 1]);
+            let mut res = point;
+            res.mul_assign(&s);
+            res.add_assign(&self.evals[i << 1]);
+            self.evals[i] = res;
+        }
+
+        self.evals.truncate(1 << (self.num_vars() - 1));
     }
 
-    #[inline(always)]
-    fn truncate(&mut self, new_len: usize) {
-        self.evals.truncate(new_len);
+    pub fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> MultilinearExtension<E> {
+        let mut new_evals = vec![E::ZERO; 1 << (self.num_vars() - 1)];
+        for i in 0..(1 << (self.num_vars() - 1)) {
+            let mut s = self.evals[(i << 1) + 1];
+            s.sub_assign(&self.evals[i << 1]);
+            let mut res = point;
+            res.mul_base(&s);
+            res.add_base(&self.evals[i << 1]);
+            new_evals[i] = res;
+        }
+
+        MultilinearExtension::<E>::new(new_evals)
     }
 
-    #[inline(always)]
-    fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> MultilinearExtension<E> {
-        MultilinearExtension::<E>::new(self.fix_variable_ext_internal(point))
+    /// Sums all the evaluations of the polynomial at f(0, ...) and f(1, ...).
+    pub fn sum_evaluations(&self) -> (F, F) {
+        // We want to sum up all the evaluations of the polynomial `f` except for those at the
+        // variable at the start. We assume lexicographic ordering, so poly[0] and poly[1] will be
+        // f(0, 0, ..., 0) and f(1, 0, ..., 0).
+        let mut evals_0 = F::ZERO;
+        let mut evals_1 = F::ZERO;
+        for i in 0..(1 << (self.num_vars() - 1)) {
+            evals_0.add_assign(&self.evals[i << 1]);
+            evals_1.add_assign(&self.evals[(i << 1) + 1]);
+        }
+
+        (evals_0, evals_1)
     }
 }
 

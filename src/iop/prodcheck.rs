@@ -4,7 +4,7 @@
 use crate::{
     field::{ChallengeField, Field},
     iop::{sumcheck::SumcheckProof, zerocheck},
-    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
+    polynomial::{MultilinearExtension, VirtualPolynomial},
     transcript::Transcript,
 };
 
@@ -98,7 +98,7 @@ pub fn compute_h<F: Field>(
     // Now we create the zerocheck polynomial and run a zerocheck on it.
     let upper_half_prod =
         MultilinearExtension::new(prod_poly.evals[prod_poly.len() / 2..].to_vec());
-    let mut a = VirtualPolynomial::from(nominator.merge(upper_half_prod));
+    let mut a = nominator.merge(upper_half_prod);
 
     let evens = MultilinearExtension::new(
         prod_poly
@@ -121,10 +121,10 @@ pub fn compute_h<F: Field>(
             .map(|e| *e)
             .collect::<Vec<F>>(),
     );
-    let c = VirtualPolynomial::from(lower_half_prod.merge(odds));
+    let c = lower_half_prod.merge(odds);
 
-    b.mul_assign(&c);
-    b.evals.iter_mut().for_each(|e| e.negate());
-    a.add_assign(&b);
-    a
+    // b * c - a
+    b.mul_assign_mle(&c);
+    b.add_assign_mle(&a, 1, true);
+    b
 }

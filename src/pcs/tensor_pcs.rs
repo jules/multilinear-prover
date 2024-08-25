@@ -5,7 +5,7 @@ use crate::{
     linear_code::LinearCode,
     merkle_tree::MerkleTree,
     pcs::PolynomialCommitmentScheme,
-    polynomial::{MultilinearExtension, MultivariatePolynomial},
+    polynomial::MultilinearExtension,
     transcript::Transcript,
 };
 use blake2::{Blake2s256, Digest};
@@ -97,7 +97,7 @@ where
         let encoded_matrices = polys
             .par_iter()
             .map(|poly| {
-                poly.evals()
+                poly.evals
                     .chunks(log_size)
                     .flat_map(|chunk| self.code.encode(chunk))
                     .collect::<Vec<F>>()
@@ -168,7 +168,7 @@ where
                 outer_expansion.iter().enumerate().for_each(|(j, tensor)| {
                     t_prime.iter_mut().enumerate().for_each(|(k, entry)| {
                         let mut tensor = tensor.clone();
-                        tensor.mul_base(&polys[i].eval(j * log_size + k));
+                        tensor.mul_base(&polys[i].evals[j * log_size + k]);
                         entry.add_assign(&tensor);
                     });
                 });

@@ -3,7 +3,7 @@
 use super::sumcheck::{self, SumcheckError, SumcheckProof};
 use crate::{
     field::{ChallengeField, Field},
-    polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
+    polynomial::{MultilinearExtension, VirtualPolynomial},
     transcript::Transcript,
 };
 

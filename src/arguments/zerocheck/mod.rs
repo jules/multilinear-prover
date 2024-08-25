@@ -14,7 +14,7 @@ mod tests {
         },
         linear_code::ReedSolomonCode,
         pcs::TensorPCS,
-        polynomial::{MultilinearExtension, MultivariatePolynomial, VirtualPolynomial},
+        polynomial::{MultilinearExtension, VirtualPolynomial},
         test_utils::rand_poly,
         transcript::Blake2sTranscript,
         univariate_utils::precompute_lagrange_coefficients,

@@ -1,109 +1,89 @@
-use super::{MultilinearExtension, MultivariatePolynomial};
+use super::MultilinearExtension;
 use crate::field::{ChallengeField, Field};
 use core::cmp::max;
 use rayon::prelude::*;
 
 /// A representation of multiple polynomials mixed together with addition or multiplication.
-// NOTE no bookkeeping on how mixings were performed
 #[derive(Clone, Debug)]
 pub struct VirtualPolynomial<F: Field> {
     degree: usize,
     pub constituents: Vec<MultilinearExtension<F>>,
-    pub evals: Vec<F>,
+    // Column indices, exponent, negation
+    pub products: Vec<(Vec<usize>, usize, bool)>,
 }
 
 impl<F: Field> VirtualPolynomial<F> {
-    pub fn new(evals: Vec<F>, constituents: Vec<MultilinearExtension<F>>, degree: usize) -> Self {
+    pub fn new(
+        constituents: Vec<MultilinearExtension<F>>,
+        degree: usize,
+        products: Vec<(Vec<usize>, usize, bool)>,
+    ) -> Self {
         Self {
             degree,
             constituents,
-            evals,
+            products,
         }
     }
 
     pub fn add_assign(&mut self, other: &Self) {
+        let original_len = self.constituents.len();
         self.constituents.extend(other.constituents.clone());
-        self.evals
-            .iter_mut()
-            .zip(other.evals.iter())
-            .for_each(|(e, o)| {
-                e.add_assign(o);
-            });
         self.degree = max(self.degree, other.degree);
-    }
 
-    pub fn mul_assign(&mut self, other: &Self) {
-        self.constituents.extend(other.constituents.clone());
-        self.evals
-            .iter_mut()
-            .zip(other.evals.iter())
-            .for_each(|(e, o)| {
-                e.mul_assign(o);
+        let mut shifted_products = other.products.clone();
+        shifted_products.iter_mut().for_each(|product| {
+            product.0.iter_mut().for_each(|index| {
+                *index = *index + original_len;
             });
-        self.degree += other.degree;
+        });
+        self.products.extend(shifted_products);
     }
 
-    pub fn add_assign_mle(&mut self, other: &MultilinearExtension<F>) {
+    pub fn add_assign_mle(
+        &mut self,
+        other: &MultilinearExtension<F>,
+        exponent: usize,
+        negate: bool,
+    ) {
         self.constituents.push(other.clone());
-        self.evals
-            .iter_mut()
-            .zip(other.evals.iter())
-            .for_each(|(e, o)| {
-                e.add_assign(o);
-            });
+        self.products
+            .push((vec![self.constituents.len() - 1], exponent, negate));
     }
 
     pub fn mul_assign_mle(&mut self, other: &MultilinearExtension<F>) {
         self.constituents.push(other.clone());
-        self.evals
-            .iter_mut()
-            .zip(other.evals.iter())
-            .for_each(|(e, o)| {
-                e.mul_assign(o);
-            });
         self.degree += 1;
-    }
-}
-
-impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.evals.len()
+        self.products.iter_mut().for_each(|product| {
+            product.0.push(self.constituents.len() - 1);
+        });
     }
 
+    pub fn set_exponent(&mut self, product_index: usize, exponent: usize) {
+        self.products[product_index].1 = exponent;
+    }
+
     #[inline(always)]
-    fn degree(&self) -> usize {
+    pub fn num_vars(&self) -> usize {
+        self.constituents[0].num_vars()
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.constituents[0].len()
+    }
+
+    #[inline(always)]
+    pub fn degree(&self) -> usize {
         self.degree
     }
 
-    #[inline(always)]
-    fn evals(&self) -> &[F] {
-        &self.evals
-    }
-
-    #[inline(always)]
-    fn eval(&self, index: usize) -> F {
-        self.evals[index]
-    }
-
-    #[inline(always)]
-    fn eval_mut(&mut self, index: usize) -> &mut F {
-        &mut self.evals[index]
-    }
-
-    #[inline(always)]
-    fn truncate(&mut self, new_len: usize) {
-        self.evals.truncate(new_len);
-    }
-
-    fn fix_variable(&mut self, point: F) {
+    pub fn fix_variable(&mut self, point: F) {
         self.constituents
             .par_iter_mut()
             .for_each(|mle| mle.fix_variable(point));
     }
 
-    #[inline(always)]
-    fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> VirtualPolynomial<E> {
+    pub fn fix_variable_ext<E: ChallengeField<F>>(&self, point: E) -> VirtualPolynomial<E> {
         VirtualPolynomial::<E> {
             degree: self.degree,
             constituents: self
@@ -111,13 +91,13 @@ impl<F: Field> MultivariatePolynomial<F> for VirtualPolynomial<F> {
                 .par_iter()
                 .map(|mle| mle.fix_variable_ext(point))
                 .collect::<Vec<MultilinearExtension<E>>>(),
-            evals: vec![],
+            products: self.products.clone(),
         }
     }
 }
 
 impl<F: Field> From<MultilinearExtension<F>> for VirtualPolynomial<F> {
     fn from(value: MultilinearExtension<F>) -> Self {
-        Self::new(value.evals.clone(), vec![value], 1)
+        Self::new(vec![value], 1, vec![(vec![0], 1, false)])
     }
 }
