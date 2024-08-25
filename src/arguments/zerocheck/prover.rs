@@ -40,6 +40,7 @@ pub struct ZerocheckProof<
     pub evaluations: Vec<E>,
     pub commitment: PCS::Commitment,
     pub proof: PCS::Proof,
+    pub products: Vec<(Vec<usize>, usize, bool)>,
 }
 
 impl<
@@ -105,6 +106,7 @@ impl<
             evaluations,
             commitment,
             proof,
+            products: poly.products.clone(),
         }
     }
 

@@ -65,6 +65,39 @@ mod tests {
     }
 
     #[test]
+    fn test_prove_mult_gate() {
+        let multipliers = (0..2)
+            .map(|_| rand_poly(POLY_SIZE_BITS))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+        let answers = MultilinearExtension::new(
+            multipliers[0]
+                .evals
+                .iter()
+                .zip(multipliers[1].evals.iter())
+                .map(|(a, b)| {
+                    let mut a = a.clone();
+                    a.mul_assign(b);
+                    a
+                })
+                .collect::<Vec<M31>>(),
+        );
+
+        // a * b - c
+        let mut poly: VirtualPolynomial<M31> = multipliers[0].clone().into();
+        poly.mul_assign_mle(&multipliers[1]);
+        poly.add_assign_mle(&answers, 1, true);
+
+        let mut prover = make_prover(poly.degree());
+        let proof = prover.prove(poly);
+
+        let mut verifier = make_verifier();
+        let accept = verifier
+            .verify(&proof)
+            .expect("should not panic after verifying a well-constructed proof");
+        assert!(accept);
+    }
+
+    #[test]
     fn test_prove_verify_64_poly() {
         let mut poly_set = (0..63)
             .map(|_| rand_poly(POLY_SIZE_BITS))

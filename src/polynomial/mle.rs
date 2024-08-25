@@ -12,16 +12,19 @@ impl<F: Field> MultilinearExtension<F> {
         Self { evals }
     }
 
-    /// What is called `merge` in the papers is actually an interleaving of two multilinear
-    /// polynomials.
     pub fn merge(&self, other: Self) -> Self {
         debug_assert!(self.len() == other.len());
+        /*
         let mut new_evals = Vec::with_capacity(self.len() * 2);
         for i in 0..self.len() {
             new_evals.push(self.evals[i]);
             new_evals.push(other.evals[i]);
         }
         Self::new(new_evals)
+        */
+        let mut evals = self.evals.clone();
+        evals.extend(other.evals.clone());
+        Self::new(evals)
     }
 
     #[inline(always)]
@@ -42,8 +45,6 @@ impl<F: Field> MultilinearExtension<F> {
     /// Sets the first variable of the polynomial to `point`. Used for fixing sumcheck challenges
     /// into the polynomial.
     pub fn fix_variable(&mut self, point: F) {
-        // TODO: par
-        // TODO: binius highly optimizes this
         for i in 0..(1 << (self.num_vars() - 1)) {
             let mut s = self.evals[(i << 1) + 1];
             s.sub_assign(&self.evals[i << 1]);

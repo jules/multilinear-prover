@@ -52,7 +52,7 @@ impl<
     ) -> ProdcheckProof<F, E, T, PCS> {
         let (frac_poly, nominator, denominator) =
             prodcheck::compute_frac_poly(unsorted_columns, sorted_columns);
-        let mut v = prodcheck::compute_v(frac_poly);
+        let v = prodcheck::compute_v(frac_poly);
         let h = prodcheck::compute_h(&v, nominator, denominator);
         let zerocheck_proof = self.zerocheck_prover.prove(h);
 

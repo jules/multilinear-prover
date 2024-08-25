@@ -62,6 +62,10 @@ impl<F: Field> VirtualPolynomial<F> {
         self.products[product_index].1 = exponent;
     }
 
+    pub fn negate_product(&mut self, product_index: usize) {
+        self.products[product_index].2 = !self.products[product_index].2;
+    }
+
     #[inline(always)]
     pub fn num_vars(&self) -> usize {
         self.constituents[0].num_vars()

@@ -52,19 +52,40 @@ impl<
             eq_lifted.fix_variable(*v);
         }
 
+        let mut evaluations = proof.evaluations.clone();
+        evaluations.push(eq_lifted.evals[0]);
+
         // We ensure that the constraint applied to all evaluations in the proof, multiplied by the
-        // evaluation of eq, equals the final claim of the sumcheck verifier. Otherwise, reject.
-        // XXX virtual polynomial tooling should replace this N degree multiplication.
-        let mut final_value = proof.evaluations.iter().fold(E::ONE, |mut acc, x| {
-            acc.mul_assign(x);
-            acc
-        });
-        final_value.mul_assign(&eq_lifted.evals[0]);
+        // evaluation of eq, equals the final claim of the sumcheck verifier. We compute this final
+        // value here.
+        // XXX DRY
+        let final_value = proof
+            .products
+            .iter()
+            .map(|product| {
+                let mut a = evaluations[product.0[0]];
+                product.0.iter().skip(1).for_each(|i| {
+                    a.mul_assign(&evaluations[*i]);
+                });
+
+                // TODO exponent
+
+                if product.2 {
+                    a.negate();
+                }
+
+                a
+            })
+            .fold(E::ZERO, |mut acc, x| {
+                acc.add_assign(&x);
+                acc
+            });
 
         // Check that the value holds w.r.t. the sumcheck verifier, and also ensure that all given
         // polynomial evaluations are actually correct w.r.t. the given commitment and evaluation
         // proof.
-        Ok(final_sum == final_value
+        Ok(final_sum == E::ZERO
+            && final_sum == final_value
             && self.pcs.verify(
                 &proof.commitment,
                 &eval_point,

@@ -2,10 +2,8 @@
 //! should be taken from [`zerocheck`].
 
 use crate::{
-    field::{ChallengeField, Field},
-    iop::{sumcheck::SumcheckProof, zerocheck},
+    field::Field,
     polynomial::{MultilinearExtension, VirtualPolynomial},
-    transcript::Transcript,
 };
 
 /// Computes the fractional polynomial, declared as:
@@ -50,9 +48,6 @@ pub fn compute_frac_poly<F: Field>(
                 eval.mul_assign(p_eval);
             });
     });
-    denominator.evals.iter_mut().for_each(|eval| {
-        *eval = eval.inverse().unwrap();
-    });
 
     // NOTE: We keep it as a 'MultilinearExtension' since it is supposed to be a multilinear
     // representation.
@@ -63,7 +58,7 @@ pub fn compute_frac_poly<F: Field>(
             .zip(denominator.evals.iter())
             .map(|(n_eval, d_eval)| {
                 let mut n_eval = n_eval.clone();
-                n_eval.mul_assign(d_eval);
+                n_eval.mul_assign(&d_eval.inverse().unwrap());
                 n_eval
             })
             .collect::<Vec<F>>(),
@@ -83,6 +78,9 @@ pub fn compute_v<F: Field>(frac_poly: MultilinearExtension<F>) -> MultilinearExt
         prod_evals.push(lhs);
     }
 
+    // The final product should equal one.
+    debug_assert!(*prod_evals.last().unwrap() == F::ONE);
+
     // Last evaluation should be zero.
     prod_evals.push(F::ZERO);
 
@@ -98,7 +96,7 @@ pub fn compute_h<F: Field>(
     // Now we create the zerocheck polynomial and run a zerocheck on it.
     let upper_half_prod =
         MultilinearExtension::new(prod_poly.evals[prod_poly.len() / 2..].to_vec());
-    let mut a = nominator.merge(upper_half_prod);
+    let mut a = VirtualPolynomial::from(nominator.merge(upper_half_prod));
 
     let evens = MultilinearExtension::new(
         prod_poly
@@ -123,8 +121,9 @@ pub fn compute_h<F: Field>(
     );
     let c = lower_half_prod.merge(odds);
 
-    // b * c - a
+    // a - b * c
     b.mul_assign_mle(&c);
-    b.add_assign_mle(&a, 1, true);
-    b
+    b.negate_product(0);
+    a.add_assign(&b);
+    a
 }
