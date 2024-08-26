@@ -9,6 +9,9 @@ use crate::{
     transcript::Transcript,
 };
 
+/// Verifier for the prodcheck argument. Builds entirely on the [`ZerocheckVerifier`] and uses its
+/// internal PCS and transcript to perform any verification needed outside of verifying the
+/// zerocheck polynomial created in the prodcheck prover.
 pub struct ProdcheckVerifier<
     F: Field,
     E: ChallengeField<F>,
@@ -33,6 +36,9 @@ impl<
         }
     }
 
+    /// Verifies a [`ProdcheckProof`]. Essentially, does two things:
+    /// - Ensures that the commitment to the product polynomial (v) equals 1 at (0, 1, ..., 1)
+    /// - Verifies the zerocheck proof of the zerocheck polynomial (h)
     pub fn verify(&mut self, proof: &ProdcheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
         let mut eval_point = vec![E::ONE; proof.num_vars];
         eval_point[0] = E::ZERO;

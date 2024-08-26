@@ -9,6 +9,9 @@ use crate::{
     transcript::Transcript,
 };
 
+/// Prover for the prodcheck argument. Builds entirely on the [`ZerocheckProver`] and uses its
+/// internal PCS and transcript to prove the argument besides the zerocheck done on the h
+/// polynomial.
 pub struct ProdcheckProver<
     F: Field,
     E: ChallengeField<F>,
@@ -45,6 +48,11 @@ impl<
         }
     }
 
+    /// Proves a product check relation between two sets of columns. The prover will construct both
+    /// a 'product polynomial' (v) and a 'zerocheck polynomial' (h). The product polynomial is
+    /// committed to and evaluated at (0, 1, ..., 1), and if the relation holds, this evaluation
+    /// should produce the value 1. On top of this it creates a zerocheck polynomial from the
+    /// product polynomial and produces a zerocheck proof.
     pub fn prove(
         &mut self,
         unsorted_columns: &[MultilinearExtension<F>],
