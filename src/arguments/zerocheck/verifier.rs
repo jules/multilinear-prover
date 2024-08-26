@@ -80,7 +80,7 @@ impl<
                     a.mul_assign(&evaluations[*i]);
                 });
 
-                // TODO exponent
+                a.pow(product.1 as u32);
 
                 if product.2 {
                     a.negate();

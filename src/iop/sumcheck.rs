@@ -1,4 +1,4 @@
-//! Sumcheck prover/verifier
+//! Sumcheck prover/verifier.
 
 use crate::{
     field::{ChallengeField, Field},

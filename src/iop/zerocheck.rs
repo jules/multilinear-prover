@@ -1,4 +1,4 @@
-//! Zerocheck prover/verifier
+//! Zerocheck prover/verifier.
 
 use super::sumcheck::{self, SumcheckError, SumcheckProof};
 use crate::{

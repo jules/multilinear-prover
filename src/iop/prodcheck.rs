@@ -1,5 +1,6 @@
 //! Product check IOP utils. This module does not include any clear prover or verifier since this
-//! should be taken from [`zerocheck`].
+//! should be taken from [`zerocheck`]. For a full prodcheck argument, check out
+//! [`crate::arguments::prodcheck`].
 
 use crate::{
     field::Field,
