@@ -35,7 +35,7 @@ mod tests {
         // multiplication with eq.
         let lagrange_coefficients = precompute_lagrange_coefficients(degree + 2);
         let transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
+        let pcs = TensorPCS::new(143, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
         ZerocheckProver::new(transcript, pcs, lagrange_coefficients)
     }
 
@@ -46,7 +46,7 @@ mod tests {
         TensorPCS<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>>,
     > {
         let transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
+        let pcs = TensorPCS::new(143, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
         ZerocheckVerifier::new(transcript, pcs)
     }
 
@@ -85,7 +85,7 @@ mod tests {
         // a * b - c
         let mut poly: VirtualPolynomial<M31> = multipliers[0].clone().into();
         poly.mul_assign_mle(&multipliers[1]);
-        poly.add_assign_mle(&answers, 1, true);
+        poly.add_assign_mle(&answers, true);
 
         let mut prover = make_prover(poly.degree());
         let proof = prover.prove(poly);
@@ -119,7 +119,7 @@ mod tests {
         // a * b - c
         let mut poly: VirtualPolynomial<M31> = multipliers[0].clone().into();
         poly.mul_assign_mle(&multipliers[1]);
-        poly.add_assign_mle(&wrong_answers, 1, true);
+        poly.add_assign_mle(&wrong_answers, true);
 
         let mut prover = make_prover(poly.degree());
         let proof = prover.prove(poly);

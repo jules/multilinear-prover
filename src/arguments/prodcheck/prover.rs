@@ -62,6 +62,7 @@ impl<
             prodcheck::compute_frac_poly(unsorted_columns, sorted_columns);
         let v = prodcheck::compute_v(frac_poly);
         let h = prodcheck::compute_h(&v, nominator, denominator);
+
         let zerocheck_proof = self.zerocheck_prover.prove(h);
 
         // We also need a commitment and evaluation proof of v(0, 1, ..., 1).

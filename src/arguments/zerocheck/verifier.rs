@@ -80,9 +80,7 @@ impl<
                     a.mul_assign(&evaluations[*i]);
                 });
 
-                a.pow(product.1 as u32);
-
-                if product.2 {
+                if product.1 {
                     a.negate();
                 }
 

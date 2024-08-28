@@ -8,15 +8,15 @@ use rayon::prelude::*;
 pub struct VirtualPolynomial<F: Field> {
     degree: usize,
     pub constituents: Vec<MultilinearExtension<F>>,
-    // Column indices, exponent, negation
-    pub products: Vec<(Vec<usize>, usize, bool)>,
+    // Column indices, negation
+    pub products: Vec<(Vec<usize>, bool)>,
 }
 
 impl<F: Field> VirtualPolynomial<F> {
     pub fn new(
         constituents: Vec<MultilinearExtension<F>>,
         degree: usize,
-        products: Vec<(Vec<usize>, usize, bool)>,
+        products: Vec<(Vec<usize>, bool)>,
     ) -> Self {
         Self {
             degree,
@@ -39,15 +39,10 @@ impl<F: Field> VirtualPolynomial<F> {
         self.products.extend(shifted_products);
     }
 
-    pub fn add_assign_mle(
-        &mut self,
-        other: &MultilinearExtension<F>,
-        exponent: usize,
-        negate: bool,
-    ) {
+    pub fn add_assign_mle(&mut self, other: &MultilinearExtension<F>, negate: bool) {
         self.constituents.push(other.clone());
         self.products
-            .push((vec![self.constituents.len() - 1], exponent, negate));
+            .push((vec![self.constituents.len() - 1], negate));
     }
 
     pub fn mul_assign_mle(&mut self, other: &MultilinearExtension<F>) {
@@ -58,12 +53,8 @@ impl<F: Field> VirtualPolynomial<F> {
         });
     }
 
-    pub fn set_exponent(&mut self, product_index: usize, exponent: usize) {
-        self.products[product_index].1 = exponent;
-    }
-
     pub fn negate_product(&mut self, product_index: usize) {
-        self.products[product_index].2 = !self.products[product_index].2;
+        self.products[product_index].1 = !self.products[product_index].1;
     }
 
     #[inline(always)]
@@ -102,6 +93,6 @@ impl<F: Field> VirtualPolynomial<F> {
 
 impl<F: Field> From<MultilinearExtension<F>> for VirtualPolynomial<F> {
     fn from(value: MultilinearExtension<F>) -> Self {
-        Self::new(vec![value], 1, vec![(vec![0], 1, false)])
+        Self::new(vec![value], 1, vec![(vec![0], false)])
     }
 }

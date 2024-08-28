@@ -118,8 +118,8 @@ fn construct_round_poly<F: Field>(
     poly.products.iter().for_each(|product| {
         let mut a = individual_evals[product.0[0]].clone();
         product.0.iter().skip(1).for_each(|i| {
-            a.iter_mut()
-                .zip(individual_evals[*i].iter())
+            a.par_iter_mut()
+                .zip(individual_evals[*i].par_iter())
                 .for_each(|(f, s)| {
                     f.iter_mut().zip(s).for_each(|(a, b)| {
                         a.mul_assign(b);
@@ -127,17 +127,10 @@ fn construct_round_poly<F: Field>(
                 });
         });
 
-        // Raise to given exponent.
-        a.iter_mut().for_each(|p| {
-            p.iter_mut().for_each(|eval| {
-                eval.pow(product.1 as u32);
-            });
-        });
-
         // Negate if needed.
-        if product.2 {
-            a.iter_mut().for_each(|p| {
-                p.iter_mut().for_each(|eval| {
+        if product.1 {
+            a.par_iter_mut().for_each(|p| {
+                p.par_iter_mut().for_each(|eval| {
                     eval.negate();
                 });
             });
@@ -145,8 +138,8 @@ fn construct_round_poly<F: Field>(
 
         // Add to final poly eval.
         intermediate_evals
-            .iter_mut()
-            .zip(a.iter())
+            .par_iter_mut()
+            .zip(a.par_iter())
             .for_each(|(i, a)| {
                 i.iter_mut().zip(a.iter()).for_each(|(n, m)| {
                     n.add_assign(m);

@@ -32,7 +32,7 @@ mod tests {
         // multiplication with eq, and one for the zerocheck polynomial.
         let lagrange_coefficients = precompute_lagrange_coefficients(degree + 3);
         let transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
+        let pcs = TensorPCS::new(143, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
         ProdcheckProver::new(transcript, pcs, lagrange_coefficients)
     }
 
@@ -43,7 +43,7 @@ mod tests {
         TensorPCS<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>>,
     > {
         let transcript = Blake2sTranscript::default();
-        let pcs = TensorPCS::new(100, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
+        let pcs = TensorPCS::new(143, ReedSolomonCode::new(ROOTS_OF_UNITY_BITS));
         ProdcheckVerifier::new(transcript, pcs)
     }
 

@@ -40,7 +40,7 @@ pub struct ZerocheckProof<
     pub evaluations: Vec<E>,
     pub commitment: PCS::Commitment,
     pub proof: PCS::Proof,
-    pub products: Vec<(Vec<usize>, usize, bool)>,
+    pub products: Vec<(Vec<usize>, bool)>,
 }
 
 impl<

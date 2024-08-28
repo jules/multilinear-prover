@@ -50,7 +50,7 @@ pub fn compute_frac_poly<F: Field>(
             });
     });
 
-    // NOTE: We keep it as a 'MultilinearExtension' since it is supposed to be a multilinear
+    // We keep it as a 'MultilinearExtension' since it is supposed to be a multilinear
     // representation.
     let frac_poly = MultilinearExtension::new(
         nominator
