@@ -1,3 +1,3 @@
-pub mod lookup;
+pub mod logup;
 pub mod prodcheck;
 pub mod zerocheck;
