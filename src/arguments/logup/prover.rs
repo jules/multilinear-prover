@@ -9,6 +9,9 @@ use crate::{
     transcript::Transcript,
 };
 
+/// A prover for the LogUp batch-column lookup protocol. Internally, consists only of a zerocheck
+/// argument prover, as this is used near the end of the proof to establish correct relations
+/// between the trace columns and the table.
 pub struct LogUpProver<
     F: Field,
     E: ChallengeField<F>,
@@ -16,15 +19,6 @@ pub struct LogUpProver<
     PCS: PolynomialCommitmentScheme<F, E, T>,
 > {
     zerocheck_prover: ZerocheckProver<F, E, T, PCS>,
-}
-
-pub struct LogUpProof<
-    F: Field,
-    E: ChallengeField<F>,
-    T: Transcript<F>,
-    PCS: PolynomialCommitmentScheme<F, E, T>,
-> {
-    pub zerocheck_proof: ZerocheckProof<F, E, T, PCS>,
 }
 
 impl<
@@ -49,7 +43,7 @@ impl<
         &mut self,
         trace_columns: &[MultilinearExtension<F>],
         table: &MultilinearExtension<F>,
-    ) -> LogUpProof<F, E, T, PCS> {
+    ) -> ZerocheckProof<F, E, T, PCS> {
         let multiplicities = logup::compute_multiplicities(trace_columns, table);
 
         self.zerocheck_prover
@@ -58,6 +52,13 @@ impl<
         // XXX do we lift into extension here?
         let x = self.zerocheck_prover.transcript.draw_challenge();
         let helpers = logup::compute_helper_columns(trace_columns, table, &multiplicities, x);
+        for helper in helpers {
+            self.zerocheck_prover
+                .transcript
+                .observe_witnesses(&helper.evals);
+        }
+
+        // TODO zerocheck here
         todo!()
     }
 

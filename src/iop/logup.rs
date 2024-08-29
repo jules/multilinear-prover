@@ -55,7 +55,7 @@ pub fn compute_helper_columns<F: Field>(
             .collect::<Vec<F>>(),
     ));
 
-    // Rest is just the reciprocal of x + column.
+    // Rest is just the negative reciprocal of x + column.
     columns.iter().for_each(|column| {
         helper_columns.push(MultilinearExtension::new(
             column
@@ -64,7 +64,9 @@ pub fn compute_helper_columns<F: Field>(
                 .map(|value| {
                     let mut value = value.clone();
                     value.add_assign(&x);
-                    value.inverse().unwrap()
+                    let mut inv = value.inverse().unwrap();
+                    inv.negate();
+                    inv
                 })
                 .collect::<Vec<F>>(),
         ));
