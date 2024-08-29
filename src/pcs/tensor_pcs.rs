@@ -673,6 +673,53 @@ mod tests {
     }
 
     #[test]
+    fn commit_prove_verify_32_poly() {
+        let polys = (0..32)
+            .map(|_| rand_poly(POLY_SIZE_BITS))
+            .collect::<Vec<MultilinearExtension<M31>>>();
+
+        let mut prover_transcript = Blake2sTranscript::default();
+        let pcs = TensorPCS::<M31, M31_4, Blake2sTranscript<M31>, ReedSolomonCode<M31, CircleFFT>> {
+            n_test_queries: N_QUERIES,
+            code: ReedSolomonCode::new(ROOTS_OF_UNITY_BITS),
+            _f_marker: PhantomData::<M31>,
+            _e_marker: PhantomData::<M31_4>,
+            _t_marker: PhantomData::<Blake2sTranscript<M31>>,
+        };
+        let now = std::time::Instant::now();
+        let commitment = pcs.commit(&polys, &mut prover_transcript);
+        let elapsed = std::time::Instant::now();
+        println!("commitment takes {:?}", elapsed - now);
+
+        let mut eval = vec![M31_4::default(); polys[0].num_vars()];
+        eval.iter_mut().for_each(|e| {
+            *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
+        });
+        let now = std::time::Instant::now();
+        let proof = pcs.prove(&commitment, &polys, &eval, &mut prover_transcript);
+        let elapsed = std::time::Instant::now();
+        println!("proof takes {:?}", elapsed - now);
+
+        let results = (0..32)
+            .map(|i| {
+                let mut res = polys[i].fix_variable_ext(eval[0]);
+                eval.iter().skip(1).for_each(|e| {
+                    res.fix_variable(*e);
+                });
+
+                res.evals[0]
+            })
+            .collect::<Vec<M31_4>>();
+        assert!(pcs.verify(
+            &commitment,
+            &eval,
+            &results,
+            &proof,
+            &mut Blake2sTranscript::default()
+        ));
+    }
+
+    #[test]
     fn commit_prove_verify_256_poly() {
         let polys = (0..256)
             .map(|_| rand_poly(POLY_SIZE_BITS))
