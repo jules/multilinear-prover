@@ -25,21 +25,18 @@ pub fn compute_multiplicities<F: Field>(
 
 /// Computes the LogUp helper columns. Currently fixed for a sum size of 1.
 pub fn compute_helper_columns<F: Field>(
-    columns: &[MultilinearExtension<F>],
-    table: &MultilinearExtension<F>,
+    x_plus_columns: &[MultilinearExtension<F>],
+    x_plus_table: &MultilinearExtension<F>,
     multiplicities: &MultilinearExtension<F>,
     x: F,
 ) -> Vec<MultilinearExtension<F>> {
-    let mut helper_columns = Vec::with_capacity(columns.len());
+    let mut helper_columns = Vec::with_capacity(x_plus_columns.len() + 1);
+
     // First column: m / (x + t).
-    let inverses = table
+    let inverses = x_plus_table
         .evals
         .iter()
-        .map(|value| {
-            let mut value = value.clone();
-            value.add_assign(&x);
-            value.inverse().unwrap()
-        })
+        .map(|value| value.inverse().unwrap())
         .collect::<Vec<F>>();
 
     helper_columns.push(MultilinearExtension::new(
@@ -56,14 +53,12 @@ pub fn compute_helper_columns<F: Field>(
     ));
 
     // Rest is just the negative reciprocal of x + column.
-    columns.iter().for_each(|column| {
+    x_plus_columns.iter().for_each(|column| {
         helper_columns.push(MultilinearExtension::new(
             column
                 .evals
                 .iter()
                 .map(|value| {
-                    let mut value = value.clone();
-                    value.add_assign(&x);
                     let mut inv = value.inverse().unwrap();
                     inv.negate();
                     inv

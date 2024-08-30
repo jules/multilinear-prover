@@ -43,14 +43,8 @@ impl<
 
     /// Run the zerocheck argument verifier for a given [`ZerocheckProof`].
     pub fn verify(&mut self, proof: &ZerocheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
-        // First off, we need to check that the initial claimed sum is indeed zero.
-        let base_field_coeffs = proof.zerocheck_proof.proofs[0]
-            .iter()
-            .map(|c| c.real_coeff())
-            .collect::<Vec<F>>();
-        let mut res = univariate_eval(&base_field_coeffs, F::ZERO);
-        res.add_assign(&univariate_eval(&base_field_coeffs, F::ONE));
-        if res != F::ZERO {
+        // Ensure that the first claimed sum equals zero.
+        if proof.zerocheck_proof.claimed_sum != F::ZERO {
             return Ok(false);
         }
 
