@@ -74,7 +74,7 @@ impl<
 
         // Compute x + column for all trace columns.
         let x_plus_columns = trace_columns
-            .iter()
+            .par_iter()
             .map(|column| {
                 MultilinearExtension::new(
                     column
@@ -106,7 +106,7 @@ impl<
         let rho_product = MultilinearExtension::new(
             x_plus_table
                 .evals
-                .iter()
+                .par_iter()
                 .enumerate()
                 .map(|(i, value)| {
                     let mut value = value.clone();
@@ -117,6 +117,8 @@ impl<
                 })
                 .collect::<Vec<F>>(),
         );
+
+        // Compute exclusionary rho products
 
         // Draw a list of challenges with which we create the lagrange kernel.
         let mut c = vec![F::ZERO; table.len()];
@@ -135,7 +137,7 @@ impl<
         let negated_multiplicities = MultilinearExtension::new(negated_multiplicites);
 
         let sumchecks = helpers
-            .iter()
+            .par_iter()
             .enumerate()
             .map(|(i, helper)| {
                 let scaled_kernel = MultilinearExtension::new(
@@ -151,10 +153,11 @@ impl<
                 );
 
                 let mut product_left = VirtualPolynomial::from(helper.clone());
-                product_left.mul_assign_mle(&rho[i]);
+                product_left.mul_assign_mle(&rho_product);
 
                 let mut product_right = VirtualPolynomial::from(helper.clone());
                 product_right.mul_assign_mle(&rho_product);
+                product_right.negate_product(0);
 
                 // right hand side TODO
 

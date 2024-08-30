@@ -126,6 +126,35 @@ impl Field for M31 {
         Some(p1111111111111111111111111111101)
     }
 
+    fn batch_inverse(elements: &[Self]) -> Option<Vec<Self>> {
+        let mut cumulative_products = Vec::with_capacity(elements.len() + 1);
+        cumulative_products.push(Self::ONE);
+        (0..elements.len()).for_each(|i| {
+            let mut v = elements[i];
+            v.mul_assign(&cumulative_products[i]);
+            cumulative_products.push(v);
+        });
+
+        let mut intermediates = cumulative_products[1..].to_vec();
+        let intermediates_len = intermediates.len();
+        intermediates[intermediates_len - 1] = intermediates[intermediates_len - 1].inverse()?;
+        (0..elements.len() - 1).rev().for_each(|i| {
+            let mut v = intermediates[i + 1];
+            v.mul_assign(&elements[i + 1]);
+            intermediates[i] = v;
+        });
+
+        let mut inverses = Vec::with_capacity(elements.len());
+        inverses.push(intermediates[0]);
+        (1..elements.len()).for_each(|i| {
+            let mut v = cumulative_products[i];
+            v.mul_assign(&intermediates[i]);
+            inverses.push(v);
+        });
+
+        Some(inverses)
+    }
+
     fn add_assign(&mut self, other: &Self) {
         let sum = self.0.wrapping_add(other.0);
         // cond select of result based on overflow
@@ -304,5 +333,20 @@ mod tests {
         let inv = a.inverse().unwrap();
         a.mul_assign(&inv);
         assert_eq!(M31::ONE, a);
+    }
+
+    #[test]
+    fn test_batch_inverse() {
+        let elements = (0..8)
+            .map(|_| rand_fp_from_rng(&mut rand::thread_rng()))
+            .collect::<Vec<M31>>();
+
+        let naive_inverses = elements
+            .iter()
+            .map(|e| e.inverse().unwrap())
+            .collect::<Vec<M31>>();
+
+        let batch_inverses = M31::batch_inverse(&elements).unwrap();
+        assert_eq!(naive_inverses, batch_inverses);
     }
 }

@@ -81,6 +81,10 @@ impl Field for M31_2 {
         }
     }
 
+    fn batch_inverse(elements: &[Self]) -> Option<Vec<Self>> {
+        todo!()
+    }
+
     fn add_assign(&mut self, other: &Self) {
         self.c0.add_assign(&other.c0);
         self.c1.add_assign(&other.c1);

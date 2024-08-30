@@ -32,6 +32,7 @@ pub trait Field:
 
     fn is_zero(&self) -> bool;
     fn inverse(&self) -> Option<Self>;
+    fn batch_inverse(elements: &[Self]) -> Option<Vec<Self>>;
 
     fn add_assign(&mut self, other: &Self);
     fn sub_assign(&mut self, other: &Self);
