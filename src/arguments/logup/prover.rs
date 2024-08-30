@@ -100,6 +100,16 @@ impl<
             .map(|_| self.transcript.draw_challenge())
             .collect::<Vec<F>>();
 
+        // Draw a list of challenges with which we create the lagrange kernel.
+        let mut c = vec![F::ZERO; table.len()];
+        c.iter_mut()
+            .for_each(|e| *e = self.transcript.draw_challenge());
+
+        // Compute lagrange kernel of the hypercube.
+        // NOTE: currently just using eq, it seems to serve a similar purpose?
+        let lagrange_kernel = zerocheck::compute_eq(c, table.num_vars() as u32);
+
+        // We construct a virtual polynomial that attests to the correct lookup relation.
         let mut rho = vec![x_plus_table.clone()];
         rho.extend(x_plus_columns.clone());
 
@@ -118,23 +128,57 @@ impl<
                 .collect::<Vec<F>>(),
         );
 
-        // Compute exclusionary rho products
+        let mut exclusionary_product_terms = (0..x_plus_columns.len() + 1)
+            .into_par_iter()
+            .map(|i| {
+                let inverses = F::batch_inverse(&rho[i].evals)
+                    .expect("should be able to batch invert a rho column");
+                rho_product
+                    .evals
+                    .iter()
+                    .zip(inverses.iter())
+                    .map(|(a, b)| {
+                        let mut a = a.clone();
+                        a.mul_assign(b);
+                        a
+                    })
+                    .collect::<Vec<F>>()
+            })
+            .collect::<Vec<Vec<F>>>();
 
-        // Draw a list of challenges with which we create the lagrange kernel.
-        let mut c = vec![F::ZERO; table.len()];
-        c.iter_mut()
-            .for_each(|e| *e = self.transcript.draw_challenge());
+        let first_term = multiplicities
+            .evals
+            .iter()
+            .zip(exclusionary_product_terms[0].iter())
+            .map(|(a, b)| {
+                let mut a = a.clone();
+                a.mul_assign(b);
+                a
+            })
+            .collect::<Vec<F>>();
 
-        // Compute lagrange kernel of the hypercube.
-        // NOTE: currently just using eq, it seems to serve a similar purpose?
-        let lagrange_kernel = zerocheck::compute_eq(c, table.num_vars() as u32);
+        let mut rhs = Vec::with_capacity(x_plus_columns.len() + 1);
+        rhs.push(first_term);
+        exclusionary_product_terms
+            .iter_mut()
+            .skip(1)
+            .for_each(|column| {
+                column.iter_mut().for_each(|v| {
+                    v.negate();
+                });
+            });
+        rhs.extend(exclusionary_product_terms[1..].to_vec());
 
-        // We construct a virtual polynomial that attests to the correct lookup relation.
-        let mut negated_multiplicites = multiplicities.evals.clone();
-        negated_multiplicites.iter_mut().for_each(|value| {
-            value.negate();
-        });
-        let negated_multiplicities = MultilinearExtension::new(negated_multiplicites);
+        let exclusionary_product = MultilinearExtension::new(
+            (0..table.len())
+                .map(|i| {
+                    rhs.iter().fold(F::ZERO, |mut acc, column| {
+                        acc.add_assign(&column[i]);
+                        acc
+                    })
+                })
+                .collect::<Vec<F>>(),
+        );
 
         let sumchecks = helpers
             .par_iter()
@@ -152,19 +196,12 @@ impl<
                         .collect::<Vec<F>>(),
                 );
 
-                let mut product_left = VirtualPolynomial::from(helper.clone());
-                product_left.mul_assign_mle(&rho_product);
-
-                let mut product_right = VirtualPolynomial::from(helper.clone());
-                product_right.mul_assign_mle(&rho_product);
-                product_right.negate_product(0);
-
-                // right hand side TODO
-
-                product_left.add_assign(&product_right);
-                product_left.mul_assign_mle(&scaled_kernel);
-                product_left.add_assign_mle(helper, false);
-                product_left
+                let mut sumcheck = VirtualPolynomial::from(helper.clone());
+                sumcheck.mul_assign_mle(&rho_product);
+                sumcheck.add_assign_mle(&exclusionary_product, true);
+                sumcheck.mul_assign_mle(&scaled_kernel);
+                sumcheck.add_assign_mle(helper, false);
+                sumcheck
             })
             .collect::<Vec<VirtualPolynomial<F>>>();
 
