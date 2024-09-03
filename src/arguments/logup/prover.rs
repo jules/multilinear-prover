@@ -1,7 +1,7 @@
 //! Wrapper for a full logup prover, combining the IOP and PCS elements.
 
 use crate::{
-    arguments::zerocheck::prover::{ZerocheckProof, ZerocheckProver},
+    arguments::zerocheck::prover::ZerocheckProof,
     field::{ChallengeField, Field},
     iop::{logup, sumcheck, zerocheck},
     pcs::PolynomialCommitmentScheme,
@@ -11,9 +11,7 @@ use crate::{
 use core::marker::PhantomData;
 use rayon::prelude::*;
 
-/// A prover for the LogUp batch-column lookup protocol. Internally, consists only of a zerocheck
-/// argument prover, as this is used near the end of the proof to establish correct relations
-/// between the trace columns and the table.
+/// A prover for the LogUp batch-column lookup protocol.
 pub struct LogUpProver<
     F: Field,
     E: ChallengeField<F>,
@@ -33,8 +31,6 @@ impl<
         PCS: PolynomialCommitmentScheme<F, E, T>,
     > LogUpProver<F, E, T, PCS>
 {
-    /// Creates a new LogUp prover by feeding the given arguments into the creation of a
-    /// zerocheck prover.
     pub fn new(transcript: T, pcs: PCS, lagrange_coefficients: Vec<Vec<F>>) -> Self {
         Self {
             lagrange_coefficients,
@@ -56,6 +52,7 @@ impl<
 
         let multiplicities = logup::compute_multiplicities(trace_columns, table);
 
+        // TODO NEEDS TO BE COMMITMENT AND ADDED TO PROOF
         self.transcript.observe_witnesses(&multiplicities.evals);
         // XXX do we lift into extension here?
         let x = self.transcript.draw_challenge();
@@ -94,6 +91,8 @@ impl<
         helpers.iter().for_each(|helper| {
             self.transcript.observe_witnesses(&helper.evals);
         });
+
+        // TODO COMMIT AND OBSERVE, ADD TO PROOF
 
         // XXX should probably also be extension?
         let batching_challenges = (0..x_plus_columns.len())
