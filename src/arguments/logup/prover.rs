@@ -1,9 +1,12 @@
 //! Wrapper for a full logup prover, combining the IOP and PCS elements.
 
 use crate::{
-    arguments::zerocheck::prover::ZerocheckProof,
     field::{ChallengeField, Field},
-    iop::{logup, sumcheck, zerocheck},
+    iop::{
+        logup,
+        sumcheck::{self, SumcheckProof},
+        zerocheck,
+    },
     pcs::PolynomialCommitmentScheme,
     polynomial::{MultilinearExtension, VirtualPolynomial},
     transcript::{IntoObservable, Transcript},
@@ -22,6 +25,24 @@ pub struct LogUpProver<
     pub transcript: T,
     pub pcs: PCS,
     _e_marker: PhantomData<E>,
+}
+
+pub struct LogUpProof<
+    F: Field,
+    E: ChallengeField<F>,
+    T: Transcript<F>,
+    PCS: PolynomialCommitmentScheme<F, E, T>,
+> {
+    pub zerocheck_proof: SumcheckProof<F, E>,
+    pub multiplicities_commitment: PCS::Commitment,
+    pub multiplicities_proof: PCS::Proof,
+    pub helpers_commitment: PCS::Commitment,
+    pub helpers_proof: PCS::Proof,
+    pub sumcheck_commitment: PCS::Commitment,
+    pub sumcheck_proof: PCS::Proof,
+    pub evaluations: Vec<E>,
+    pub num_helpers: usize,
+    pub trace_len: usize,
 }
 
 impl<
@@ -47,7 +68,7 @@ impl<
         &mut self,
         trace_columns: &[MultilinearExtension<F>],
         table: &MultilinearExtension<F>,
-    ) -> ZerocheckProof<F, E, T, PCS> {
+    ) -> LogUpProof<F, E, T, PCS> {
         debug_assert!(self.lagrange_coefficients.len() == 4);
 
         let multiplicities = logup::compute_multiplicities(trace_columns, table);
@@ -101,7 +122,6 @@ impl<
         self.transcript
             .observe_hashes(&helpers_commitment.into_observable());
 
-        // XXX should probably also be extension?
         let batching_challenges = (0..x_plus_columns.len())
             .map(|_| self.transcript.draw_challenge())
             .collect::<Vec<F>>();
@@ -233,23 +253,44 @@ impl<
             })
             .collect::<Vec<E>>();
 
-        let commitment = self
+        let sumcheck_commitment = self
             .pcs
             .commit(&sumcheck.constituents, &mut self.transcript);
+        self.transcript
+            .observe_hashes(&sumcheck_commitment.into_observable());
 
-        let proof = self.pcs.prove(
-            &commitment,
+        let multiplicities_proof = self.pcs.prove(
+            &multiplicities_commitment,
+            &[multiplicities],
+            &eval_point,
+            &mut self.transcript,
+        );
+
+        let helpers_proof = self.pcs.prove(
+            &helpers_commitment,
+            &helpers,
+            &eval_point,
+            &mut self.transcript,
+        );
+
+        let sumcheck_proof = self.pcs.prove(
+            &sumcheck_commitment,
             &sumcheck.constituents,
             &eval_point,
             &mut self.transcript,
         );
 
-        ZerocheckProof {
+        LogUpProof {
             zerocheck_proof,
+            multiplicities_commitment,
+            multiplicities_proof,
+            helpers_commitment,
+            helpers_proof,
+            sumcheck_commitment,
+            sumcheck_proof,
             evaluations,
-            commitment,
-            proof,
-            products: sumcheck.products.clone(),
+            num_helpers: helpers.len(),
+            trace_len: table.len(),
         }
     }
 

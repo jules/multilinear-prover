@@ -1,7 +1,7 @@
 //! Wrapper for a full logup verifier, combining the IOP and PCS elements.
 
 use crate::{
-    arguments::zerocheck::prover::ZerocheckProof,
+    arguments::logup::prover::LogUpProof,
     field::{ChallengeField, Field},
     iop::{
         logup,
@@ -10,7 +10,7 @@ use crate::{
     },
     pcs::PolynomialCommitmentScheme,
     polynomial::{MultilinearExtension, VirtualPolynomial},
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 use core::marker::PhantomData;
 use rayon::prelude::*;
@@ -43,31 +43,25 @@ impl<
         }
     }
 
-    pub fn verify(&mut self, proof: &ZerocheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
+    pub fn verify(&mut self, proof: &LogUpProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
         // Observe multiplicities.
-        //self.transcript.observe_hashes(
-        //    &proof
-        //        .multipliticies_commitment
-        //        .tree
-        //        .elements
-        //        .clone()
-        //        .into_iter()
-        //        .flatten()
-        //        .collect::<Vec<[u8; 32]>>(),
-        //);
+        self.transcript
+            .observe_hashes(&proof.multiplicities_commitment.into_observable());
 
         let _x = self.transcript.draw_challenge();
 
         // Observe helpers.
+        self.transcript
+            .observe_hashes(&proof.helpers_commitment.into_observable());
 
-        //let batching_challenges = (0..x_plus_columns.len())
-        //    .map(|_| self.transcript.draw_challenge())
-        //    .collect::<Vec<F>>();
+        let batching_challenges = (0..proof.num_helpers)
+            .map(|_| self.transcript.draw_challenge())
+            .collect::<Vec<F>>();
 
         // Draw a list of challenges with which we create the lagrange kernel.
-        //let mut c = vec![F::ZERO; table.len()];
-        //c.iter_mut()
-        //    .for_each(|e| *e = self.transcript.draw_challenge());
+        let mut c = vec![F::ZERO; proof.trace_len];
+        c.iter_mut()
+            .for_each(|e| *e = self.transcript.draw_challenge());
 
         // Ensure correct zerocheck.
         if proof.zerocheck_proof.claimed_sum != F::ZERO {
@@ -79,6 +73,29 @@ impl<
 
         // Ensure correctness of logup constraint.
 
-        todo!()
+        // Observe remaining sumcheck constituents commitment.
+        self.transcript
+            .observe_hashes(&proof.sumcheck_commitment.into_observable());
+
+        // Verify all evaluations.
+        Ok(self.pcs.verify(
+            &proof.multiplicities_commitment,
+            &eval_point,
+            &[proof.evaluations[0]],
+            &proof.multiplicities_proof,
+            &mut self.transcript,
+        ) && self.pcs.verify(
+            &proof.helpers_commitment,
+            &eval_point,
+            &proof.evaluations[1..proof.num_helpers + 1],
+            &proof.helpers_proof,
+            &mut self.transcript,
+        ) && self.pcs.verify(
+            &proof.sumcheck_commitment,
+            &eval_point,
+            &proof.evaluations[proof.num_helpers + 1..],
+            &proof.sumcheck_proof,
+            &mut self.transcript,
+        ))
     }
 }
