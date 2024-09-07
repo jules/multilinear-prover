@@ -3,7 +3,11 @@
 use crate::{
     arguments::zerocheck::prover::ZerocheckProof,
     field::{ChallengeField, Field},
-    iop::{logup, sumcheck, zerocheck},
+    iop::{
+        logup,
+        sumcheck::{self, SumcheckError},
+        zerocheck,
+    },
     pcs::PolynomialCommitmentScheme,
     polynomial::{MultilinearExtension, VirtualPolynomial},
     transcript::Transcript,
@@ -40,14 +44,40 @@ impl<
     }
 
     pub fn verify(&mut self, proof: &ZerocheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
-        // We will have the evaluations laid out as follows.
+        // Observe multiplicities.
+        //self.transcript.observe_hashes(
+        //    &proof
+        //        .multipliticies_commitment
+        //        .tree
+        //        .elements
+        //        .clone()
+        //        .into_iter()
+        //        .flatten()
+        //        .collect::<Vec<[u8; 32]>>(),
+        //);
 
-        let x = self.transcript.draw_challenge();
+        let _x = self.transcript.draw_challenge();
+
+        // Observe helpers.
+
+        //let batching_challenges = (0..x_plus_columns.len())
+        //    .map(|_| self.transcript.draw_challenge())
+        //    .collect::<Vec<F>>();
 
         // Draw a list of challenges with which we create the lagrange kernel.
-        let mut c = vec![F::ZERO; table.len()];
-        c.iter_mut()
-            .for_each(|e| *e = self.transcript.draw_challenge());
+        //let mut c = vec![F::ZERO; table.len()];
+        //c.iter_mut()
+        //    .for_each(|e| *e = self.transcript.draw_challenge());
+
+        // Ensure correct zerocheck.
+        if proof.zerocheck_proof.claimed_sum != F::ZERO {
+            return Ok(false);
+        }
+
+        let (final_claim, eval_point) =
+            sumcheck::verify(&proof.zerocheck_proof, &mut self.transcript)?;
+
+        // Ensure correctness of logup constraint.
 
         todo!()
     }

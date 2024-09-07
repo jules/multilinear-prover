@@ -96,6 +96,10 @@ impl MerkleTree {
         let hash = <[u8; 32]>::from(hasher.finalize());
         hash == self.root
     }
+
+    pub fn to_hashes(&self) -> Vec<&[u8; 32]> {
+        self.elements.iter().flatten().collect::<Vec<&[u8; 32]>>()
+    }
 }
 
 #[cfg(test)]

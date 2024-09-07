@@ -52,8 +52,11 @@ impl<
 
         let multiplicities = logup::compute_multiplicities(trace_columns, table);
 
-        // TODO NEEDS TO BE COMMITMENT AND ADDED TO PROOF
-        self.transcript.observe_witnesses(&multiplicities.evals);
+        // Observes the commitment into the transcript.
+        let multiplicities_commitment = self
+            .pcs
+            .commit(&[multiplicities.clone()], &mut self.transcript);
+
         // XXX do we lift into extension here?
         let x = self.transcript.draw_challenge();
 
@@ -92,7 +95,8 @@ impl<
             self.transcript.observe_witnesses(&helper.evals);
         });
 
-        // TODO COMMIT AND OBSERVE, ADD TO PROOF
+        // Commit and observe.
+        let helpers_commitment = self.pcs.commit(&helpers, &mut self.transcript);
 
         // XXX should probably also be extension?
         let batching_challenges = (0..x_plus_columns.len())

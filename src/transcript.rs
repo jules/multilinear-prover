@@ -8,7 +8,7 @@ pub trait Transcript<F: Field>: Default + Send + Sync {
     fn draw_bits(&mut self, bits: usize) -> usize;
     fn observe_witness(&mut self, witness: F);
     fn observe_witnesses(&mut self, witness: &[F]);
-    fn observe_hashes(&mut self, hashes: &[[u8; 32]]);
+    fn observe_hashes(&mut self, hashes: &[&[u8; 32]]);
 }
 
 #[derive(Default)]
@@ -93,7 +93,7 @@ where
         }
     }
 
-    fn observe_hashes(&mut self, hashes: &[[u8; 32]]) {
+    fn observe_hashes(&mut self, hashes: &[&[u8; 32]]) {
         self.state.reserve(hashes.len() * 32);
         for h in hashes {
             self.state.extend(h.clone());

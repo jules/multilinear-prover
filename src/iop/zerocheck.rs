@@ -74,7 +74,5 @@ pub fn compute_eq<F: Field>(challenges: Vec<F>, num_vars: u32) -> MultilinearExt
             });
     });
 
-    println!("{:?}", eq_evals);
-
     MultilinearExtension::new(eq_evals)
 }

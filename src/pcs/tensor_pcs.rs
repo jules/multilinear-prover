@@ -129,14 +129,7 @@ where
         let tree = MerkleTree::new(leaves);
 
         // Observe merkle tree into transcript.
-        transcript.observe_hashes(
-            &tree
-                .elements
-                .clone()
-                .into_iter()
-                .flatten()
-                .collect::<Vec<[u8; 32]>>(),
-        );
+        transcript.observe_hashes(&tree.to_hashes());
 
         TensorCommitment {
             tree,
@@ -259,15 +252,7 @@ where
         let outer_expansion = tensor_product_expansion(&eval[(log_size.ilog2() as usize)..]);
 
         // Observe commitment into transcript.
-        transcript.observe_hashes(
-            &comm
-                .tree
-                .elements
-                .clone()
-                .into_iter()
-                .flatten()
-                .collect::<Vec<[u8; 32]>>(),
-        );
+        transcript.observe_hashes(&comm.tree.to_hashes());
 
         // Create batch value.
         let n_challenges = (comm.encoded_matrices.len() as f32).log2().ceil() as usize;
