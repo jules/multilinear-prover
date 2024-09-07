@@ -6,11 +6,11 @@ pub use tensor_pcs::TensorPCS;
 use crate::{
     field::{ChallengeField, Field},
     polynomial::MultilinearExtension,
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 
 pub trait PolynomialCommitmentScheme<F: Field, E: ChallengeField<F>, T: Transcript<F>> {
-    type Commitment;
+    type Commitment: IntoObservable;
     type Proof;
 
     fn commit(&self, polys: &[MultilinearExtension<F>], transcript: &mut T) -> Self::Commitment;

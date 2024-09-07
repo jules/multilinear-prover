@@ -6,7 +6,7 @@ use crate::{
     merkle_tree::MerkleTree,
     pcs::PolynomialCommitmentScheme,
     polynomial::MultilinearExtension,
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 use blake2::{Blake2s256, Digest};
 use core::marker::PhantomData;
@@ -28,6 +28,12 @@ pub struct TensorCommitment<F: Field> {
     tree: MerkleTree,
     // Inputted polynomials reshaped as matrices and encoded row-wise with a linear code.
     encoded_matrices: Vec<Vec<F>>,
+}
+
+impl<F: Field> IntoObservable for TensorCommitment<F> {
+    fn into_observable(&self) -> Vec<&[u8; 32]> {
+        self.tree.to_hashes()
+    }
 }
 
 /// An evaluation proof made with the tensor polynomial commitment scheme.
@@ -126,17 +132,13 @@ where
         // Build a merkle tree out of our encoded matrices. We populate the base layer with a hash
         // of each column and then work up.
         // The merkle tree impl takes care of the layer-on-layer hashing.
-        let tree = MerkleTree::new(leaves);
-
-        // Observe merkle tree into transcript.
-        transcript.observe_hashes(&tree.to_hashes());
-
         TensorCommitment {
-            tree,
+            tree: MerkleTree::new(leaves),
             encoded_matrices,
         }
     }
 
+    // We assume that the merkle tree has been observed into the transcript by now.
     fn prove(
         &self,
         comm: &Self::Commitment,
@@ -239,6 +241,8 @@ where
         }
     }
 
+    // We assume similarly that the verifier has observed the commitment in question into the
+    // transcript.
     fn verify(
         &self,
         comm: &Self::Commitment,
@@ -250,9 +254,6 @@ where
         let log_size = proof.t_prime.len();
         let inner_expansion = tensor_product_expansion(&eval[..(log_size.ilog2() as usize)]);
         let outer_expansion = tensor_product_expansion(&eval[(log_size.ilog2() as usize)..]);
-
-        // Observe commitment into transcript.
-        transcript.observe_hashes(&comm.tree.to_hashes());
 
         // Create batch value.
         let n_challenges = (comm.encoded_matrices.len() as f32).log2().ceil() as usize;
@@ -416,6 +417,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -433,12 +435,14 @@ mod tests {
             res.fix_variable(*e);
         });
 
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -455,6 +459,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -475,12 +480,14 @@ mod tests {
         eval.iter_mut().for_each(|e| {
             *e = M31_4::from_usize(rand::thread_rng().gen_range(0..M31::ORDER) as usize);
         });
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(!pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -497,6 +504,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut Blake2sTranscript::default());
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -515,12 +523,14 @@ mod tests {
         eval.iter().skip(1).for_each(|e| {
             res.fix_variable(*e);
         });
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(!pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -537,6 +547,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone().into()], &mut prover_transcript);
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -554,12 +565,14 @@ mod tests {
         eval.iter().skip(1).for_each(|e| {
             res.fix_variable(*e);
         });
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(!pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0]],
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -577,6 +590,7 @@ mod tests {
             _t_marker: PhantomData::<Blake2sTranscript<M31>>,
         };
         let commitment = pcs.commit(&[poly.clone(), poly_2.clone()], &mut prover_transcript);
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -597,12 +611,14 @@ mod tests {
         eval.iter().skip(1).for_each(|e| {
             res_2.fix_variable(*e);
         });
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0], res_2.evals[0]],
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -624,6 +640,7 @@ mod tests {
             &[poly.clone(), poly_2.clone(), poly_3.clone()],
             &mut prover_transcript,
         );
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); poly.num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -648,12 +665,14 @@ mod tests {
         eval.iter().skip(1).for_each(|e| {
             res_3.fix_variable(*e);
         });
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(pcs.verify(
             &commitment,
             &eval,
             &[res.evals[0], res_2.evals[0], res_3.evals[0]],
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -675,6 +694,7 @@ mod tests {
         let commitment = pcs.commit(&polys, &mut prover_transcript);
         let elapsed = std::time::Instant::now();
         println!("commitment takes {:?}", elapsed - now);
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); polys[0].num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -695,12 +715,14 @@ mod tests {
                 res.evals[0]
             })
             .collect::<Vec<M31_4>>();
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(pcs.verify(
             &commitment,
             &eval,
             &results,
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 
@@ -722,6 +744,7 @@ mod tests {
         let commitment = pcs.commit(&polys, &mut prover_transcript);
         let elapsed = std::time::Instant::now();
         println!("commitment takes {:?}", elapsed - now);
+        prover_transcript.observe_hashes(&commitment.into_observable());
 
         let mut eval = vec![M31_4::default(); polys[0].num_vars()];
         eval.iter_mut().for_each(|e| {
@@ -742,12 +765,14 @@ mod tests {
                 res.evals[0]
             })
             .collect::<Vec<M31_4>>();
+        let mut verifier_transcript = Blake2sTranscript::default();
+        verifier_transcript.observe_hashes(&commitment.into_observable());
         assert!(pcs.verify(
             &commitment,
             &eval,
             &results,
             &proof,
-            &mut Blake2sTranscript::default()
+            &mut verifier_transcript
         ));
     }
 }

@@ -11,6 +11,10 @@ pub trait Transcript<F: Field>: Default + Send + Sync {
     fn observe_hashes(&mut self, hashes: &[&[u8; 32]]);
 }
 
+pub trait IntoObservable {
+    fn into_observable(&self) -> Vec<&[u8; 32]>;
+}
+
 #[derive(Default)]
 pub struct Blake2sTranscript<F: Field> {
     hasher: Blake2s256,

@@ -5,7 +5,7 @@ use crate::{
     field::{ChallengeField, Field},
     iop::{sumcheck::SumcheckError, zerocheck},
     pcs::PolynomialCommitmentScheme,
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
     univariate_utils::univariate_eval,
 };
 use core::marker::PhantomData;
@@ -84,6 +84,10 @@ impl<
                 acc.add_assign(&x);
                 acc
             });
+
+        // Observe commitment into transcript before we verify
+        self.transcript
+            .observe_hashes(&proof.commitment.into_observable());
 
         // Check that the value holds w.r.t. the sumcheck verifier, and also ensure that all given
         // polynomial evaluations are actually correct w.r.t. the given commitment and evaluation

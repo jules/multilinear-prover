@@ -6,7 +6,7 @@ use crate::{
     iop::prodcheck,
     pcs::PolynomialCommitmentScheme,
     polynomial::MultilinearExtension,
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 
 /// Prover for the prodcheck argument. Builds entirely on the [`ZerocheckProver`] and uses its
@@ -75,6 +75,9 @@ impl<
             .zerocheck_prover
             .pcs
             .commit(&v, &mut self.zerocheck_prover.transcript);
+        self.zerocheck_prover
+            .transcript
+            .observe_hashes(&commitment.into_observable());
 
         let proof = self.zerocheck_prover.pcs.prove(
             &commitment,

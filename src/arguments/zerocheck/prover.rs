@@ -5,7 +5,7 @@ use crate::{
     iop::{sumcheck::SumcheckProof, zerocheck},
     pcs::PolynomialCommitmentScheme,
     polynomial::VirtualPolynomial,
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 use core::marker::PhantomData;
 use rayon::prelude::*;
@@ -93,6 +93,8 @@ impl<
         let commitment = self
             .pcs
             .commit(&poly.constituents[..n_polys], &mut self.transcript);
+        self.transcript
+            .observe_hashes(&commitment.into_observable());
 
         let proof = self.pcs.prove(
             &commitment,

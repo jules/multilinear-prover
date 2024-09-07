@@ -6,7 +6,7 @@ use crate::{
     iop::{logup, sumcheck, zerocheck},
     pcs::PolynomialCommitmentScheme,
     polynomial::{MultilinearExtension, VirtualPolynomial},
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 use core::marker::PhantomData;
 use rayon::prelude::*;
@@ -52,10 +52,11 @@ impl<
 
         let multiplicities = logup::compute_multiplicities(trace_columns, table);
 
-        // Observes the commitment into the transcript.
         let multiplicities_commitment = self
             .pcs
             .commit(&[multiplicities.clone()], &mut self.transcript);
+        self.transcript
+            .observe_hashes(&multiplicities_commitment.into_observable());
 
         // XXX do we lift into extension here?
         let x = self.transcript.draw_challenge();
@@ -97,6 +98,8 @@ impl<
 
         // Commit and observe.
         let helpers_commitment = self.pcs.commit(&helpers, &mut self.transcript);
+        self.transcript
+            .observe_hashes(&helpers_commitment.into_observable());
 
         // XXX should probably also be extension?
         let batching_challenges = (0..x_plus_columns.len())

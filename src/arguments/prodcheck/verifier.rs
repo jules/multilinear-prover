@@ -6,7 +6,7 @@ use crate::{
     field::{ChallengeField, Field},
     iop::sumcheck::SumcheckError,
     pcs::PolynomialCommitmentScheme,
-    transcript::Transcript,
+    transcript::{IntoObservable, Transcript},
 };
 
 /// Verifier for the prodcheck argument. Builds entirely on the [`ZerocheckVerifier`] and uses its
@@ -42,7 +42,14 @@ impl<
     pub fn verify(&mut self, proof: &ProdcheckProof<F, E, T, PCS>) -> Result<bool, SumcheckError> {
         let mut eval_point = vec![E::ONE; proof.num_vars];
         eval_point[0] = E::ZERO;
-        Ok(self.zerocheck_verifier.verify(&proof.zerocheck_proof)?
+        let result = self.zerocheck_verifier.verify(&proof.zerocheck_proof)?;
+
+        // Observe commitment into transcript before verifying.
+        self.zerocheck_verifier
+            .transcript
+            .observe_hashes(&proof.commitment.into_observable());
+
+        Ok(result
             && self.zerocheck_verifier.pcs.verify(
                 &proof.commitment,
                 &eval_point,
