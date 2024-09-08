@@ -21,7 +21,7 @@ mod tests {
     };
     use rand::Rng;
 
-    const POLY_SIZE_BITS: u32 = 20;
+    const POLY_SIZE_BITS: u32 = 4;
     const ROOTS_OF_UNITY_BITS: usize = (POLY_SIZE_BITS / 2 + 1) as usize;
 
     fn make_prover() -> LogUpProver<
@@ -50,16 +50,18 @@ mod tests {
 
     #[test]
     fn test_logup() {
-        let table = (1..=1 << 20)
+        let table = (1..=1 << POLY_SIZE_BITS)
             .map(|i| M31::from_usize(i))
             .collect::<Vec<M31>>();
 
+        let mut multiplicities = vec![M31::ZERO; table.len()];
         let trace_columns = (0..3)
             .map(|_| {
                 MultilinearExtension::new(
                     (0..table.len())
                         .map(|_| {
                             let r = rand::thread_rng().gen_range(0..table.len());
+                            multiplicities[r].add_assign(&M31::ONE);
                             table[r]
                         })
                         .collect::<Vec<M31>>(),
@@ -68,7 +70,11 @@ mod tests {
             .collect::<Vec<MultilinearExtension<M31>>>();
 
         let mut prover = make_prover();
-        let proof = prover.prove(&trace_columns, &MultilinearExtension::new(table));
+        let proof = prover.prove(
+            &trace_columns,
+            &MultilinearExtension::new(table),
+            &MultilinearExtension::new(multiplicities),
+        );
 
         let mut verifier = make_verifier();
         let accept = verifier

@@ -4,6 +4,7 @@ use crate::{field::Field, polynomial::MultilinearExtension};
 use rayon::prelude::*;
 
 /// Compute multiplicities of table values over all columns, assuming the table is injective.
+// XXX extremely inefficient we should just take note of multiplicities during witness generation
 pub fn compute_multiplicities<F: Field>(
     columns: &[MultilinearExtension<F>],
     table: &MultilinearExtension<F>,
@@ -29,7 +30,6 @@ pub fn compute_helper_columns<F: Field>(
     x_plus_columns: &[MultilinearExtension<F>],
     x_plus_table: &MultilinearExtension<F>,
     multiplicities: &MultilinearExtension<F>,
-    x: F,
 ) -> Vec<MultilinearExtension<F>> {
     let mut helper_columns = Vec::with_capacity(x_plus_columns.len() + 1);
 

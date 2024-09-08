@@ -42,7 +42,7 @@ pub struct LogUpProof<
     pub sumcheck_proof: PCS::Proof,
     pub evaluations: Vec<E>,
     pub num_helpers: usize,
-    pub trace_len: usize,
+    pub num_vars: usize,
 }
 
 impl<
@@ -68,10 +68,9 @@ impl<
         &mut self,
         trace_columns: &[MultilinearExtension<F>],
         table: &MultilinearExtension<F>,
+        multiplicities: &MultilinearExtension<F>,
     ) -> LogUpProof<F, E, T, PCS> {
         debug_assert!(self.lagrange_coefficients.len() == 4);
-
-        let multiplicities = logup::compute_multiplicities(trace_columns, table);
 
         let multiplicities_commitment = self
             .pcs
@@ -112,98 +111,60 @@ impl<
             })
             .collect::<Vec<MultilinearExtension<F>>>();
 
-        let helpers = logup::compute_helper_columns(&x_plus_columns, table, &multiplicities, x);
-        helpers.iter().for_each(|helper| {
-            self.transcript.observe_witnesses(&helper.evals);
-        });
+        let helpers =
+            logup::compute_helper_columns(&x_plus_columns, &x_plus_table, &multiplicities);
 
         // Commit and observe.
         let helpers_commitment = self.pcs.commit(&helpers, &mut self.transcript);
         self.transcript
             .observe_hashes(&helpers_commitment.into_observable());
 
-        let batching_challenges = (0..x_plus_columns.len())
+        let batching_challenges = (0..helpers.len())
             .map(|_| self.transcript.draw_challenge())
             .collect::<Vec<F>>();
 
         // Draw a list of challenges with which we create the lagrange kernel.
-        let mut c = vec![F::ZERO; table.len()];
+        let mut c = vec![F::ZERO; table.num_vars()];
         c.iter_mut()
             .for_each(|e| *e = self.transcript.draw_challenge());
 
         // Compute lagrange kernel of the hypercube.
-        // NOTE: currently just using eq, it seems to serve a similar purpose?
-        let lagrange_kernel = zerocheck::compute_eq(c, table.num_vars() as u32);
+        let lagrange_kernel = {
+            let mut evals = vec![F::ZERO; table.len()];
+            let one_over_2_to_n = F::from_usize(table.len()).inverse().unwrap();
+
+            evals.iter_mut().enumerate().for_each(|(i, eval)| {
+                let mut i = i.clone();
+                let mut result = F::ONE;
+                (0..table.num_vars()).for_each(|j| {
+                    if i & 1 == 1 {
+                        let mut one_plus_c = c[j].clone();
+                        one_plus_c.add_assign(&F::ONE);
+                        result.mul_assign(&one_plus_c);
+                    }
+
+                    i >>= 1;
+                });
+
+                result.mul_assign(&one_over_2_to_n);
+                *eval = result;
+            });
+
+            MultilinearExtension::new(evals)
+        };
 
         // We construct a virtual polynomial that attests to the correct lookup relation.
         let mut rho = vec![x_plus_table.clone()];
         rho.extend(x_plus_columns.clone());
 
-        let rho_product = MultilinearExtension::new(
-            x_plus_table
-                .evals
-                .par_iter()
-                .enumerate()
-                .map(|(i, value)| {
-                    let mut value = value.clone();
-                    x_plus_columns.iter().for_each(|column| {
-                        value.mul_assign(&column.evals[i]);
-                    });
-                    value
-                })
-                .collect::<Vec<F>>(),
-        );
-
-        let mut exclusionary_product_terms = (0..x_plus_columns.len() + 1)
-            .into_par_iter()
-            .map(|i| {
-                let inverses = F::batch_inverse(&rho[i].evals)
-                    .expect("should be able to batch invert a rho column");
-                rho_product
-                    .evals
-                    .iter()
-                    .zip(inverses.iter())
-                    .map(|(a, b)| {
-                        let mut a = a.clone();
-                        a.mul_assign(b);
-                        a
-                    })
-                    .collect::<Vec<F>>()
-            })
-            .collect::<Vec<Vec<F>>>();
-
-        let first_term = multiplicities
-            .evals
-            .iter()
-            .zip(exclusionary_product_terms[0].iter())
-            .map(|(a, b)| {
-                let mut a = a.clone();
-                a.mul_assign(b);
-                a
-            })
-            .collect::<Vec<F>>();
-
         let mut rhs = Vec::with_capacity(x_plus_columns.len() + 1);
-        rhs.push(first_term);
-        exclusionary_product_terms
-            .iter_mut()
-            .skip(1)
-            .for_each(|column| {
-                column.iter_mut().for_each(|v| {
-                    v.negate();
-                });
-            });
-        rhs.extend(exclusionary_product_terms[1..].to_vec());
-
-        let exclusionary_product = MultilinearExtension::new(
-            (0..table.len())
-                .map(|i| {
-                    rhs.iter().fold(F::ZERO, |mut acc, column| {
-                        acc.add_assign(&column[i]);
-                        acc
-                    })
-                })
-                .collect::<Vec<F>>(),
+        rhs.push(multiplicities.clone());
+        let mut negative_one = F::ONE;
+        negative_one.negate();
+        rhs.extend(
+            (0..x_plus_columns.len())
+                .map(|_| MultilinearExtension::new(vec![negative_one; table.len()]))
+                .collect::<Vec<MultilinearExtension<F>>>(),
         );
 
         let sumchecks = helpers
@@ -223,8 +184,8 @@ impl<
                 );
 
                 let mut sumcheck = VirtualPolynomial::from(helper.clone());
-                sumcheck.mul_assign_mle(&rho_product);
-                sumcheck.add_assign_mle(&exclusionary_product, true);
+                sumcheck.mul_assign_mle(&rho[i]);
+                sumcheck.add_assign_mle(&rhs[i], true);
                 sumcheck.mul_assign_mle(&scaled_kernel);
                 sumcheck.add_assign_mle(helper, false);
                 sumcheck
@@ -239,8 +200,16 @@ impl<
         let (zerocheck_proof, eval_point) =
             sumcheck::prove(&sumcheck, &mut self.transcript, &self.lagrange_coefficients);
 
-        let evaluations = sumcheck
-            .constituents
+        let multiplicities_evaluation = {
+            let mut m_lifted = multiplicities.fix_variable_ext(eval_point[0]);
+            (1..eval_point.len()).for_each(|i| {
+                m_lifted.fix_variable(eval_point[i]);
+            });
+
+            m_lifted.evals[0]
+        };
+
+        let helpers_evaluations = helpers
             .par_iter()
             .map(|p| {
                 let mut p_lifted = p.fix_variable_ext(eval_point[0]);
@@ -253,15 +222,30 @@ impl<
             })
             .collect::<Vec<E>>();
 
-        let sumcheck_commitment = self
-            .pcs
-            .commit(&sumcheck.constituents, &mut self.transcript);
+        let rho_evaluations = rho
+            .par_iter()
+            .map(|p| {
+                let mut p_lifted = p.fix_variable_ext(eval_point[0]);
+                (1..eval_point.len()).for_each(|i| {
+                    p_lifted.fix_variable(eval_point[i]);
+                });
+
+                debug_assert!(p_lifted.evals.len() == 1);
+                p_lifted.evals[0]
+            })
+            .collect::<Vec<E>>();
+
+        let mut evaluations = vec![multiplicities_evaluation];
+        evaluations.extend(helpers_evaluations);
+        evaluations.extend(rho_evaluations);
+
+        let sumcheck_commitment = self.pcs.commit(&rho, &mut self.transcript);
         self.transcript
             .observe_hashes(&sumcheck_commitment.into_observable());
 
         let multiplicities_proof = self.pcs.prove(
             &multiplicities_commitment,
-            &[multiplicities],
+            &[multiplicities.clone()],
             &eval_point,
             &mut self.transcript,
         );
@@ -275,7 +259,7 @@ impl<
 
         let sumcheck_proof = self.pcs.prove(
             &sumcheck_commitment,
-            &sumcheck.constituents,
+            &rho,
             &eval_point,
             &mut self.transcript,
         );
@@ -290,7 +274,7 @@ impl<
             sumcheck_proof,
             evaluations,
             num_helpers: helpers.len(),
-            trace_len: table.len(),
+            num_vars: table.num_vars(),
         }
     }
 

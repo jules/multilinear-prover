@@ -59,12 +59,13 @@ impl<
             .collect::<Vec<F>>();
 
         // Draw a list of challenges with which we create the lagrange kernel.
-        let mut c = vec![F::ZERO; proof.trace_len];
+        let mut c = vec![F::ZERO; proof.num_vars];
         c.iter_mut()
             .for_each(|e| *e = self.transcript.draw_challenge());
 
         // Ensure correct zerocheck.
         if proof.zerocheck_proof.claimed_sum != F::ZERO {
+            println!("not zero");
             return Ok(false);
         }
 
